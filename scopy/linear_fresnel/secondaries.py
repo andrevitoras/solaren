@@ -7,22 +7,33 @@ The respective sources which present the designs are cited in the functions.
 """
 from copy import deepcopy
 
-from numpy import array, arctan, sin, cos, pi, arcsin
+from matplotlib import pyplot as plt
+from numpy import array, arctan, sin, cos, pi, arcsin, linspace, arccos, tan
 from portion import closed, Interval, empty
+from scipy.optimize import fsolve
 
-from niopy.geometric_transforms import dst, nrm, R, tgs2tube, ang_pn, V
-from scopy.linear_fresnel import primary_field_edge_mirrors_centers
-
+from niopy.geometric_transforms import dst, nrm, R, tgs2tube, ang_pn, V, isl, ang_h
+from niopy.plane_curves import par, hyp
 
 ########################################################################################################################
-# Zhu's adaptative secondary optic design ##############################################################################
-"""
-The following functions comprises implementations of Zhu's adaptative method to design an LFC secondary optic.
-In this sense, it contains a main function and other auxiliary functions.
+# Auxiliary functions ###### ###########################################################################################
 
-[1] Zhu G. New adaptive method to optimize the secondary reflector of linear Fresnel collectors.
-    Solar Energy 2017;144:117–26. https://doi.org/10.1016/j.solener.2017.01.005.
-"""
+
+def primary_field_edge_points(primaries: array):
+    f1 = primaries[0][-1] if primaries[0][-1][0] > primaries[0][-1][-1] else primaries[0][0]  # right side edge
+    f2 = primaries[-1][-1] if primaries[-1][-1][0] < primaries[-1][0][0] else primaries[-1][0]  # left side edge
+
+    return f1, f2
+
+
+def primary_field_edge_mirrors_centers(primaries: array):
+    n_pts = len(primaries[0])
+    k = int((n_pts - 1) // 2)
+
+    f1 = primaries[0][k] if primaries[0][k][0] > primaries[-1][k][0] else primaries[-1][k]
+    f2 = primaries[-1][k] if primaries[-1][k][0] < primaries[0][k][0] else primaries[0][k]
+
+    return f1, f2
 
 
 def reduce_interval(a: Interval, b: Interval) -> Interval:
@@ -39,6 +50,21 @@ def reduce_interval(a: Interval, b: Interval) -> Interval:
     return c
 
 
+########################################################################################################################
+########################################################################################################################
+
+
+########################################################################################################################
+# Zhu's adaptative secondary optic design ##############################################################################
+"""
+The following functions comprises implementations of Zhu's adaptative method to design an LFC secondary optic.
+In this sense, it contains a main function and other auxiliary functions.
+
+[1] Zhu G. New adaptive method to optimize the secondary reflector of linear Fresnel collectors.
+    Solar Energy 2017;144:117–26. https://doi.org/10.1016/j.solener.2017.01.005.
+"""
+
+
 def principal_incidence(point: array, primaries: array,
                         tube_center: array, tube_radius: float,
                         central_incidence=False):
@@ -47,7 +73,7 @@ def principal_incidence(point: array, primaries: array,
     It is a key parameter to define the secondary optic contour.
 
     :param point: the current point in the secondary surface contour, a [x, y] point-array.
-    :param primaries:
+    :param primaries: the primary field an array of point-arrays (heliostats).
     :param tube_center: the center point of the absorber tube, a [x, y] point-array.
     :param tube_radius: the radius of the absorber tube
     :param central_incidence: a boolean sign to calculate by central incidence (True) or intensity analysis (False).
@@ -275,11 +301,161 @@ def zhu_adaptative_secondary(primaries: array, centers: array, widths: array,
     return secondary_points
 
 
-def my_adaptative_secondary(primaries: array, centers: array, widths: array,
-                            tube_center: array, tube_radius: float,
-                            start_point: array, ds=0.1,
-                            flat_mirrors=False, central_incidence=False):
-    pass
+# def my_adaptative_secondary(primaries: array, centers: array, widths: array,
+#                             tube_center: array, tube_radius: float,
+#                             start_point: array, ds=0.1,
+#                             flat_mirrors=False, central_incidence=False):
+#     pass
 
 ########################################################################################################################
 ########################################################################################################################
+
+def parabolic_wings(field_width: float, tube_center: array, tube_radius: float, gap_size: float, num_points=120):
+    """
+    This function implements the Parabolic Wings Concentrator (PWC) design proposed by Grena and Tarquini [1] as a
+    secondary optic for linear Fresnel collectors.
+    It returns an array of [x,y] points that represents one symmetrical segment of the PWC optic.
+
+    :param field_width: the total width of the primary field, in millimeters.
+    :param tube_center: the center point of the absorber tube, in millimeters.
+    :param tube_radius: the radius of the absorber tube, in millimeters.
+    :param gap_size: the size of the gap between absorber and the PWC optic.
+    :param num_points: the number of point to discretize the contour.
+
+    :return: returns an array with the contour points of the optic.
+
+    [1] Grena, R., Tarquini, P., 2011. https://doi.org/10.1016/j.energy.2010.12.003.
+    """
+
+    # Defining auxiliary variables #################################
+    # height of the absorber tube
+    h = tube_center[-1]
+
+    # half-width of the primary field
+    w = field_width / 2
+
+    # angular size of the field regarding the absorber center
+    theta_max = arctan(w/h)
+
+    # parameter 'i' in Fig. 2 of Ref.[1]
+    par_rotating_angle = theta_max / 2
+    ################################################################
+
+    # Calculating the parametric equation of the tilted parabola #####################################
+    # point in the vertical axis that the tilted parabola passes through
+    # it is like a cusp of the optic
+    y_intercept_point = array([0, tube_radius + gap_size])
+
+    # parametric equation of the tilted parabola
+    par_f = par(alpha=1.5 * pi + par_rotating_angle,
+                f=array([0, 0]),
+                p=y_intercept_point)
+
+    # angular range of the parameter
+    # angles are measured from the parabola optical axis (from the vertex to the foci)
+    phi_1 = pi - par_rotating_angle
+    phi_2 = pi/2
+    ##################################################################################################
+
+    # tilted parabola points defined within the parameter range
+    secondary_points = array([par_f(x) for x in linspace(start=phi_1, stop=phi_2, num=num_points)])
+
+    return secondary_points + tube_center
+
+########################################################################################################################
+########################################################################################################################
+
+########################################################################################################################
+# CPC secondary for LFCs ###############################################################################################
+
+
+def virtual_receiver_perimeter(tube_radius: float, cover_outer_radius: float):
+    r = abs(tube_radius)
+    rg = abs(cover_outer_radius)
+
+    beta = arccos(r / rg)
+
+    return 2 * r * (pi - beta + tan(beta))
+
+
+def edges2tube(f1: array, f2: array, tube_center: array, tube_radius):
+    tg1, tg2 = tgs2tube(point=f1, tube_center=tube_center, tube_radius=tube_radius)
+    t1 = tg1 if tg1[0] < tube_center[0] else tg2
+
+    tg3, tg4 = tgs2tube(point=f2, tube_center=tube_center, tube_radius=tube_radius)
+    t2 = tg3 if tg3[0] > tube_center[0] else tg4
+
+    return t1, t2
+
+
+def hotel_strings(f1, f2, s1, s2):
+    a = dst(f1, s1) - dst(f1, s2)
+    b = dst(f2, s1) - dst(f2, s2)
+
+    return abs(a) + abs(b)
+
+
+def aperture_from_flow_line(f1, f2, e1, e2, flow_line, phi):
+    p = flow_line(phi)
+    s1 = isl(p=f1, v=p - f1, q=f2, u=e2)
+    s2 = isl(p=f2, v=p - f2, q=f1, u=e1)
+
+    return s1, s2
+
+
+def cpc_aperture(f1: array, f2: array, tube_center: array, tube_radius):
+    t1, t2 = edges2tube(f1=f1, f2=f2, tube_center=tube_center, tube_radius=tube_radius)
+    e1, e2 = t1 - f1, t2 - f2
+
+    A = isl(p=f1, v=e1, q=f2, u=e2)
+
+    if dst(f1, tube_center) > dst(f2, tube_center):
+        flow_line = hyp(f=f1, g=f2, p=A)
+        phi_0 = ang_h(A - f1) - pi
+    else:
+        flow_line = hyp(f=f2, g=f1, p=A)
+        phi_0 = ang_h(A - f2)
+
+    def delta_etendue(phi):
+
+        a1, a2 = aperture_from_flow_line(f1=f1, f2=f2, e1=e1, e2=e2, flow_line=flow_line, phi=phi)
+        u = hotel_strings(f1=f1, f2=f2, s1=a1, s2=a2)
+
+        return u - 4 * pi * tube_radius
+
+    phi_a = fsolve(delta_etendue, x0=phi_0)[0] - pi
+    s1, s2 = aperture_from_flow_line(f1=f1, f2=f2, e1=e1, e2=e2, flow_line=flow_line, phi=phi_a)
+
+    return s1, s2
+
+########################################################################################################################
+########################################################################################################################
+
+
+# t_radius = 35
+# g_radius = 62.5
+# t_center = array([0, 8000])
+#
+# tube_points = t_radius * array([[sin(t), cos(t)] for t in linspace(0, 2*pi, 50)]) + t_center
+# cover_points = g_radius * array([[sin(t), cos(t)] for t in linspace(0, 2*pi, 50)]) + t_center
+# in_cover_points = (g_radius - 3) * array([[sin(t), cos(t)] for t in linspace(0, 2*pi, 50)]) + t_center
+#
+#
+# pwc_optic = parabolic_wings(field_width=16560,
+#                             tube_center=t_center,
+#                             tube_radius=t_radius,
+#                             gap_size=g_radius - t_radius)
+#
+# fig = plt.figure(dpi=300)
+# plt.plot(*tube_points.T, color='black')
+# plt.plot(*cover_points.T, color='red', ls='dashed')
+# plt.plot(*in_cover_points.T, color='red', ls='dashed')
+#
+#
+# plt.plot(*pwc_optic.T, color='blue', label="Parabolic Wings Concentrator")
+#
+# plt.xlim(t_center[0] - 120, t_center[0] + 120)
+# plt.ylim(t_center[1] - 120, t_center[1] + 120)
+#
+# plt.legend()
+# plt.show()

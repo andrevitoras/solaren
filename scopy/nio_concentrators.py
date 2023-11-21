@@ -1,8 +1,8 @@
 """
 Created by André Santos (andrevitoras@gmail.com / avas@uevora.pt)
 """
-
-from numpy import arccos, sin, pi, tan, array, linspace, deg2rad
+from matplotlib import pyplot as plt
+from numpy import arccos, sin, pi, tan, array, linspace, deg2rad, cos, zeros
 
 from niopy.geometric_transforms import ang_h, ang_p, R, nrm, mid_point
 from niopy.plane_curves import uinv, wmp, ump, concatenate_curves, PlaneCurve, winv, parametric_points, wme, ume
@@ -467,3 +467,98 @@ def ideal_cpc_tube_data(theta_a: float, tube_radius: float):
     h = a / (2 * tan(theta_a_rad) + tube_radius / sin(theta_a_rad))
 
     return a, h
+
+
+def oommen_cpc(tube_radius: float, outer_glass_radius: float, theta_a: float, number_pts=150) -> array:
+    """
+    This function implements procedure proposed by Oomen and Jayaraman [1] to design a compound parabolic concentrator
+    (CPC) to an absorber tube encapsulated by a cover -- as also detailed by Abbas et al. [2].
+
+    The gap problem [3] is here solved by the virtual receiver design solution, as proposed by Winston [4]. Oommen and
+    Jayaraman [1] denominate it as the extended receiver design.
+
+    This function returns an array of [x,y] points that define the cpc optic contour.
+
+    :param tube_radius: the radius of the absorber tube, in millimeters.
+    :param outer_glass_radius: the radius of the cover tube, in millimeters.
+    :param theta_a: the half-acceptance angle of the cpc optic, in degrees.
+    :param number_pts: number of contour points to return.
+
+    :return: the contour points of the cpc optic.
+
+    [1] Oommen, R., Jayaraman, S., 2001. https://doi.org/10.1016/S0196-8904(00)00113-8.
+    [2] Abbas et al., 2018. https://doi.org/10.1016/j.apenergy.2018.09.224.
+    [3] Rabl, A., 1985. Active Solar Collectors and Their Applications. Oxford University Press, New York.
+    [4] Winston, R., 1978. Ideal flux concentrators with reflector gaps. https://doi.org/10.1364/AO.17.001668.
+    """
+
+    # storing input data in auxiliary variables ###
+    r1 = tube_radius
+    r2 = outer_glass_radius
+    theta_a_rad = deg2rad(theta_a)
+    ###############################################
+
+    # defining auxiliary variables #######################
+    r_ratio = r2/r1
+    beta = (r_ratio**2 - 1)**0.5 - arccos(1/r_ratio)
+    ######################################################
+
+    # range of the parameter used for the parametric equation #######################
+    # beginning of the first segment of the optic
+    theta_0 = arccos(r1/r2)
+    # end of the first segment / start of the second
+    theta_1 = theta_a_rad + 0.5*pi
+    # end of the second segment
+    theta_2 = 1.5*pi - theta_a_rad
+    theta_range = linspace(start=theta_0, stop=theta_2, num=number_pts)
+    #################################################################################
+
+    # Calculating the contour points of the cpc optic ##############################################
+    curve_pts = zeros(shape=(theta_range.shape[0], 2))
+    for i, theta in enumerate(theta_range):
+
+        if theta_0 <= abs(theta) <= theta_1:
+            rho = r1 * (theta + beta)
+        elif theta_1 < abs(theta) <= theta_2:
+            num = theta + theta_a_rad + 0.5*pi + 2*beta - cos(theta - theta_a_rad)
+            den = 1 + sin(theta - theta_a_rad)
+            rho = r1 * num / den
+        else:
+            raise ValueError('Values out of range!')
+
+        curve_pts[i] = r1 * sin(theta) - rho * cos(theta), -r1 * cos(theta) - rho * sin(theta)
+    ################################################################################################
+
+    return curve_pts
+
+
+t_radius = 35
+g_radius = 57.5
+half_acceptance = 56.0
+cpc_points = oommen_cpc(tube_radius=t_radius, outer_glass_radius=g_radius, theta_a=half_acceptance, number_pts=150)
+
+#
+# tube_points = t_radius * array([[sin(t), cos(t)] for t in linspace(0, 2*pi, 50)])
+# cover_points = g_radius * array([[sin(t), cos(t)] for t in linspace(0, 2*pi, 50)])
+#
+# cpc2 = symmetric_cpc2evacuated_tube(theta_a=half_acceptance,
+#                                     tube_center=array([0, 0]),
+#                                     tube_radius=t_radius,
+#                                     cover_radius=g_radius,
+#                                     nbr_pts=35, degrees=True, upwards=True)
+#
+# cpc_points = oommen_cpc(tube_radius=t_radius, outer_glass_radius=g_radius, theta_a=half_acceptance, number_pts=20)
+#
+# fig = plt.figure(dpi=300)
+# plt.plot(*tube_points.T, color='black')
+# plt.plot(*cover_points.T, color='red')
+#
+# plt.plot(*cpc2[-1].T, color='blue', label="Chaves' design")
+# plt.plot(*cpc2[-2].T, color='blue')
+# plt.plot(*cpc_points.T, label="Oomen's design", lw=0, marker='.', ms=5, color='magenta')
+#
+# plt.xlim(-30, 220)
+# plt.ylim(-30, 220)
+#
+# plt.legend()
+# plt.show()

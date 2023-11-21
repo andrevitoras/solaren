@@ -11,28 +11,24 @@ from numpy import cos, ascontiguousarray, arccos, array, sin, pi, identity, arct
     interp, sqrt
 
 """
-This module holds the functions to computes the optic-geometric performance of linear Fresnel concentrators.
-
-It is based on the method proposed by Santos et al. [1]. It considers a 3D model of the Linear Fresnel Collector (LFC),
-where the ZX plane is the transversal plane of the concentrator, and the y-axis is the longitudinal direction.
+This module holds the functions to computes the optic-geometric performance of linear Fresnel concentrators. It is based 
+on the method proposed by Santos et al. [1]. It considers a 3D model of the Linear Fresnel Collector (LFC), where the 
+ZX plane is the transversal plane of the concentrator, and the y-axis is the longitudinal direction.
 
 Here point and vectors are represented as [x, y, z] arrays, i.e., arrays whose shape is (3,). Furthermore, due to the
-linear symmetry of the concentrators, primary mirrors and receivers are then defined in the ZX plane.
-Thus, point-arrays which represents the surface of the mirrors are [x, 0, z]-like, as also other points and
-vector-arrays which defines the concentrator geometry.
+linear symmetry of the concentrators, primary mirrors and receivers are then defined in the ZX plane. Thus, point-arrays 
+which represents the surface of the mirrors are [x, 0, z], as also other points and vector-arrays which defines the 
+concentrator geometry.
 
 In this sense, a primary mirror -- a heliostat -- is defined by an array of [x, 0, z] point-arrays. In this sense:
-heliostat = array([[x1, 0, z1], ..., [xn, 0, zn]]).
-
-Then, a primary field is defined as an array of heliostats. In this sense:
-primary_field = array(hel_1, ...., hel_n]).
+heliostat = array([[x1, 0, z1], ..., [xn, 0, zn]]). Then, a primary field is defined as an array of heliostats. 
+In this sense: primary_field = array([hel_1, ...., hel_n]).
 
 Therefore, point and vector-arrays are represented by the datatype float64[:], which represents a 1D array. Heliostats
 are represented by the datatype float64[:, :], which represents a 2D arrays - one for the set of points, and other for
 the points themselves. Finally, a primary field is represented by the datatype float64[:, :, :], as expected.
 
-OBS: This module only imports from external packages such as numpy, numba, scipy... It does not import anything from
-our internal modules. In this sense, it is self-defined module.
+OBS: This module only imports from external packages such as numpy and numba. In this sense, it is self-defined module.
 
 ------------
 References:
@@ -41,7 +37,6 @@ References:
     An analytical method for the optical analysis of Linear Fresnel Reflectors with a flat receiver.
     Solar Energy 227, 203–216. https://doi.org/10.1016/j.solener.2021.08.085.
 [2] Chaves, J., 2016. Introduction to Nonimaging Optics. CRC Press, New York, 2nd Edition.
-
 """
 
 

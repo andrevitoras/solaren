@@ -3,7 +3,6 @@
 Created on Thu, Dec 3,2020 15:47:43
 New version: Feb 8 2022 09:00:55
 @author: André Santos (andrevitoras@gmail.com / avas@uevora.pt)
-
 """
 
 import json
@@ -11,14 +10,14 @@ from copy import deepcopy
 from pathlib import Path
 
 from numpy import array, linspace, pi, zeros, cos, sin, sign, cross, power, sqrt, tan, arctan, \
-    absolute, arccos,  deg2rad, ones, arange
+    absolute, deg2rad, ones, arange
 
 from scipy.interpolate import interp1d, LinearNDInterpolator, InterpolatedUnivariateSpline
 from scipy.optimize import fsolve
 
-from niopy.geometric_transforms import nrm, ang, R, dst, V, mid_point, ang_h, isl, tgs2tube
+from niopy.geometric_transforms import nrm, ang, R, dst, V, mid_point
 
-from niopy.plane_curves import PlaneCurve, hyp
+from niopy.plane_curves import PlaneCurve
 from niopy.reflection_refraction import rfx_nrm
 from scopy.linear_fresnel.optical_method import intercept_factor, acceptance_analysis
 
@@ -36,12 +35,14 @@ from utils import dic2json
 class OpticalProperty:
     """
     This class aims to represent common optical properties in the context of the design and analysis of the
-    linear Fresnel collector. It contains reflective, absorptive and transmissive properties.
+    linear Fresnel collector.
+
+    It contains reflective, absorptive and transmissive properties.
     """
 
     class reflector:
         """
-        This class stands for a common one-side reflective surface, as in a linear Fresnel primary mirror, or heliostat.
+        This class stands for a common one-side reflective surface, as in a linear Fresnel primary mirror.
         """
 
         def __init__(self, name: str, rho=1.0, slope_error=0., spec_error=0.):
@@ -337,14 +338,16 @@ class Secondary:
 class Heliostat:
     """
     The class Heliostat aims to represent a linear Fresnel primary mirror. It can be flat or cylindrical.
-    Parabolic primaries were not included since they are equivalent to the cylindrical ones and are simpler to design.
-    For a further understanding, one must read Refs. [1-5].
+
+    Parabolic primaries were not included since they are equivalent to the cylindrical ones and not that simple
+    to design. For a further understanding, one must read Refs. [1-5], particularly Ref.[6].
 
     [1] Abbas R., Montes MJ., Piera M., Martínez-Val JM. 2012. https://doi.org/10.1016/j.enconman.2011.10.010.
     [2] Qiu Y, He YL, Cheng ZD, Wang K. 2015. https://doi.org/10.1016/j.apenergy.2015.01.135.
     [3] Abbas R, Martínez-Val JM. 2017. https://doi.org/10.1016/j.apenergy.2016.01.065.
     [4] Boito, P., Grena, R. 2017. https://doi.org/10.1016/j.solener.2017.07.079.
     [5] Cheng ZD, Zhao XR, He YL, Qiu Y. 2018. https://doi.org/10.1016/j.renene.2018.06.019.
+    [6] Santos, A.V., Canavarro, D., Horta, P., Collares-Pereira, M., 2023. https://doi.org/10.1016/j.renene.2023.119380
     """
 
     def __init__(self, width: float, center: array, radius: float, nbr_pts=201):
@@ -405,10 +408,9 @@ class Heliostat:
 
     def segments_of_equal_projected_aperture(self):
         """
-        This method calculates [x,0, z] point and normal vectors in the heliostat contour that are the central points
-        of segments that has the same projected width in the aperture of the heliostat.
-        These points ensure a uniform discretization of the mirror aperture and are essential to compute efficiency
-        calculations.
+        This method calculates [x,0,z] point and normals in the heliostat contour that are the center of segments that
+        has the same projected width in the aperture of the heliostat. It ensures a uniform discretization of the mirror
+        aperture and are essential to compute efficiency calculations.
 
         :return: A tuple of [x,0,z] point-arrays and [x,0,z] vector-arrays.
         """
@@ -1008,11 +1010,14 @@ def design_flat_heliostat(hc: array, w: float, nbr_pts: int):
 def uniform_centers(mirror_width: float, nbr_mirrors: int,
                     total_width: float = None, center_distance: float = None) -> array:
     """
-    :param mirror_width: The width of the mirrors in the primary field
-    :param nbr_mirrors: number of heliostats
+    This functions calculates the center points of a uniform primary field.
 
-    :param total_width: THe total width of the primary field. The distance between the outer edges of the edge mirrors.
-    :param center_distance:
+
+    :param mirror_width: the width of the mirrors in the primary field.
+    :param nbr_mirrors: number of heliostats.
+
+    :param total_width: the total width of the primary field. The distance between the outer edges of the edge mirrors.
+    :param center_distance: the distance between two consecutive center points.
 
     :return: This function returns a list with all mirrors center point in the x-y plane
     in the form of [xc, 0]. It considers a uniform shift between primaries.
@@ -1129,20 +1134,21 @@ def gap_angle_centers(total_width: float, mirror_width: float, aim: array, theta
 
 def rabl_curvature(center: array, aim: array, theta_d: float = 0.0) -> float:
     """
-    A function to calculate the ideal curvature radius of a cylindrical heliostat as defined by Rabl [1, p.179].
+    A function to calculate the ideal curvature radius of a cylindrical heliostat as defined by Rabl [1, p.179]. A more
+    detailed explanation can be found in the work done by Santos et al. [2].
 
     :param center: heliostat's center point.
     :param aim: aim point at the receiver.
     :param theta_d: design position, a transversal incidence angle (in degrees).
+
     :return: This function returns the ideal cylindrical curvature.
 
-    References:
-    [1] Rabl A. Active Solar Collectors and Their Applications. New York: Oxford University Press; 1985.
+    [1] Rabl A. Active Solar Collectors and Their Applications. New York: Oxford University Press, 1985.
+    [2] Santos et al., 2023. https://doi.org/10.1016/j.renene.2023.119380.
 
-    It is important to highlight that calculations are for a xy-plane, where transversal incidence angles are positive
-    on the left side of the y-axis direction (a positive rotation about the z-axis). The same definition is used
-    for the heliostat angular position computed by the relation between the center point and the aim-point at the
-    receiver.
+    It is important to highlight that calculations are for a ZX plane, where transversal incidence angles are positive
+    on the right side of the z-axis direction (a positive rotation about the y-axis).
+    See the comments for the module 'scopy.sunlight'.
 
     """
 
@@ -1280,7 +1286,7 @@ def angular_position(center: array, aim: array):
     """
     This function calculates the angular position of a primary mirror of an LFC concentrator, defined by the
     'center' point, regarding the 'aim' point at the receiver.
-    It considers a [x, 0, z] point and vector-arrays. The LFC transversal plane is the ZX plane.
+    It considers a [x,0,z] point and vector-arrays. The LFC transversal plane is the ZX plane.
 
     :param center: a point-array, in millimeters.
     :param aim: a point-array, in millimeters.
@@ -1512,214 +1518,9 @@ def acceptance_angle(acceptance_data: array, ref_value=0.9):
 ########################################################################################################################
 ########################################################################################################################
 
-########################################################################################################################
-# Secondary optics functions ###########################################################################################
-
-
-def primary_field_edge_points(primaries: array):
-    f1 = primaries[0][-1] if primaries[0][-1][0] > primaries[0][-1][-1] else primaries[0][0]  # right side edge
-    f2 = primaries[-1][-1] if primaries[-1][-1][0] < primaries[-1][0][0] else primaries[-1][0]  # left side edge
-
-    return f1, f2
-
-
-def primary_field_edge_mirrors_centers(primaries: array):
-    n_pts = len(primaries[0])
-    k = int((n_pts - 1) // 2)
-
-    f1 = primaries[0][k] if primaries[0][k][0] > primaries[-1][k][0] else primaries[-1][k]
-    f2 = primaries[-1][k] if primaries[-1][k][0] < primaries[0][k][0] else primaries[0][k]
-
-    return f1, f2
-
-
-########################################################################################################################
-########################################################################################################################
-
-# CPC secondary for LFCs ###############################################################################################
-
-
-def virtual_receiver_perimeter(tube_radius: float, cover_outer_radius: float):
-    r = abs(tube_radius)
-    rg = abs(cover_outer_radius)
-
-    beta = arccos(r / rg)
-
-    return 2 * r * (pi - beta + tan(beta))
-
-
-def edges2tube(f1: array, f2: array, tube_center: array, tube_radius):
-    tg1, tg2 = tgs2tube(point=f1, tube_center=tube_center, tube_radius=tube_radius)
-    t1 = tg1 if tg1[0] < tube_center[0] else tg2
-
-    tg3, tg4 = tgs2tube(point=f2, tube_center=tube_center, tube_radius=tube_radius)
-    t2 = tg3 if tg3[0] > tube_center[0] else tg4
-
-    return t1, t2
-
-
-def hotel_strings(f1, f2, s1, s2):
-    a = dst(f1, s1) - dst(f1, s2)
-    b = dst(f2, s1) - dst(f2, s2)
-
-    return abs(a) + abs(b)
-
-
-def aperture_from_flow_line(f1, f2, e1, e2, flow_line, phi):
-    p = flow_line(phi)
-    s1 = isl(p=f1, v=p - f1, q=f2, u=e2)
-    s2 = isl(p=f2, v=p - f2, q=f1, u=e1)
-
-    return s1, s2
-
-
-def cpc_aperture(f1: array, f2: array, tube_center: array, tube_radius):
-    t1, t2 = edges2tube(f1=f1, f2=f2, tube_center=tube_center, tube_radius=tube_radius)
-    e1, e2 = t1 - f1, t2 - f2
-
-    A = isl(p=f1, v=e1, q=f2, u=e2)
-
-    if dst(f1, tube_center) > dst(f2, tube_center):
-        flow_line = hyp(f=f1, g=f2, p=A)
-        phi_0 = ang_h(A - f1) - pi
-    else:
-        flow_line = hyp(f=f2, g=f1, p=A)
-        phi_0 = ang_h(A - f2)
-
-    def delta_etendue(phi):
-
-        a1, a2 = aperture_from_flow_line(f1=f1, f2=f2, e1=e1, e2=e2, flow_line=flow_line, phi=phi)
-        u = hotel_strings(f1=f1, f2=f2, s1=a1, s2=a2)
-
-        return u - 4 * pi * tube_radius
-
-    phi_a = fsolve(delta_etendue, x0=phi_0)[0] - pi
-    s1, s2 = aperture_from_flow_line(f1=f1, f2=f2, e1=e1, e2=e2, flow_line=flow_line, phi=phi_a)
-
-    return s1, s2
-
-
-# def cpc_secondary_tubular_absorber(primaries: array, tube_center: array, tube_radius: float, section_points=121):
-#
-#     # edges of the primary field which will define the edge-rays of the secondary optic
-#     f1, f2 = primary_field_edge_points(primaries)
-#     # f1, f2 = primary_field_edge_mirrors_centers(primaries)
-#
-#     # The tangent points in the absorber tube which define the edge rays from the primary field.
-#     # tg1, tg2 = tgs2tube(point=f1, tube_center=tube_center, tube_radius=tube_radius)
-#     # t1 = tg1 if tg1[1] < tg2[1] else tg2
-#     #
-#     # tg3, tg4 = tgs2tube(point=f2, tube_center=tube_center, tube_radius=tube_radius)
-#     # t2 = tg3 if tg3[1] < tg4[1] else tg4
-#     t1, t2 = edges2tube(f1=f1, f2=f2, tube_center=tube_center, tube_radius=tube_radius)
-#
-#     # The starting point for the involute, that is, the intersection point between the optic and the absorber.
-#     A = tube_center + array([0, tube_radius])
-#
-#     # The right-side involute
-#     i1 = winv(p=A, f=tube_center, r=tube_radius)
-#     phi_1 = ang_h(array([-1, 0])).rad
-#     phi_2 = ang_h(t2 - f2).rad
-#     r_inv = array([i1(x) for x in linspace(start=phi_1, stop=phi_2, num=section_points)])
-#     s3 = r_inv[-1]
-#
-#     # The left-side involute
-#     i2 = uinv(p=A, f=tube_center, r=tube_radius)
-#     phi_1 = ang_h(t1 - f1).rad
-#     phi_2 = ang_h(array([1, 0])).rad
-#     l_inv = array([i2(x) for x in linspace(start=phi_1, stop=phi_2, num=section_points)])
-#     s4 = l_inv[0]
-#
-#     # The right-side macrofocal ellipse
-#     e1 = wme(f=tube_center, r=tube_radius, g=f2, p=s3)
-#     phi_1 = ang_p(s4 - f2, f2 - tube_center).rad
-#     phi_2 = ang_p(f1 - t1, f2 - tube_center).rad
-#     r_ell = array([e1(x) for x in linspace(start=phi_1, stop=phi_2, num=section_points)])
-#
-#     # The left-side macrofocal ellipse
-#     e2 = ume(f=tube_center, r=tube_radius, g=f1, p=s4)
-#     phi_1 = ang_p(f2 - t2, f1 - tube_center).rad
-#     phi_2 = ang_p(s3 - f1, f1 - tube_center).rad
-#     l_ell = array([e2(x) for x in linspace(start=phi_1, stop=phi_2, num=section_points)])
-#
-#     return l_ell, l_inv, r_inv, r_ell
-
-
-# def cpc_secondary_evacuated_tubular_absorber(primaries: array, tube_center: array, tube_radius: float,
-#                                              outer_radius: float, section_points=121):
-#     """
-#     This function considers the virtual receiver design as the solution for the gap losses [1].
-#
-#     :param primaries:
-#     :param tube_center:
-#     :param tube_radius:
-#     :param outer_radius:
-#     :param section_points:
-#
-#     :return:
-#
-#
-#     References:
-#     [1] Winston R. Ideal flux concentrators with reflector gaps. Applied Optics 1978;17:1668–9.
-#         https://doi.org/10.1364/AO.17.001668.
-#
-#     """
-#
-#     # edges of the primary field which will define the edge-rays of the secondary optic
-#     f1, f2 = primary_field_edge_points(primaries)
-#     # f1, f2 = primary_field_edge_mirrors_centers(primaries)
-#
-#     # The tangent points in the absorber tube which define the edge rays from the primary field.
-#     tg1, tg2 = tgs2tube(point=f1, tube_center=tube_center, tube_radius=tube_radius)
-#     t1 = tg1 if tg1[1] < tg2[1] else tg2
-#
-#     tg3, tg4 = tgs2tube(point=f2, tube_center=tube_center, tube_radius=tube_radius)
-#     t2 = tg3 if tg3[1] < tg4[1] else tg4
-#
-#     # The cusp point of the CPC optic
-#     # The starting point for the involute.
-#     A = tube_center + array([0, outer_radius])
-#
-#     p1, p2 = tgs2tube(point=A, tube_center=tube_center, tube_radius=tube_radius)
-#
-#     if p1[0] < p2[0]:
-#         p1, p2 = p2, p1
-#
-#     # The right-side involute
-#     i1 = winv(p=A, f=tube_center, r=tube_radius)
-#     phi_1 = ang_h(A - p1).rad
-#     phi_2 = ang_h(t2 - f2).rad
-#     r_inv = array([i1(x) for x in linspace(start=phi_1, stop=phi_2, num=section_points)])
-#     s3 = r_inv[-1]
-#
-#     # The left-side involute
-#     i2 = uinv(p=A, f=tube_center, r=tube_radius)
-#     phi_1 = ang_h(t1 - f1).rad
-#     phi_2 = ang_h(A - p2).rad
-#     l_inv = array([i2(x) for x in linspace(start=phi_1, stop=phi_2, num=section_points)])
-#     s4 = l_inv[0]
-#
-#     # The right-side macrofocal ellipse
-#     e1 = wme(f=tube_center, r=tube_radius, g=f2, p=s3)
-#     phi_1 = ang_p(s4 - f2, f2 - tube_center).rad
-#     phi_2 = ang_p(f1 - t1, f2 - tube_center).rad
-#     r_ell = array([e1(x) for x in linspace(start=phi_1, stop=phi_2, num=section_points)])
-#
-#     # The left-side macrofocal ellipse
-#     e2 = ume(f=tube_center, r=tube_radius, g=f1, p=s4)
-#     phi_1 = ang_p(f2 - t2, f1 - tube_center).rad
-#     phi_2 = ang_p(s3 - f1, f1 - tube_center).rad
-#     l_ell = array([e2(x) for x in linspace(start=phi_1, stop=phi_2, num=section_points)])
-#
-#     return l_ell, l_inv, r_inv, r_ell
-
-
-########################################################################################################################
-########################################################################################################################
 
 ########################################################################################################################
 # Soltrace functions ###################################################################################################
-
 
 def heliostat2soltrace(hel: Heliostat, name: str,
                        sun_dir: array, rec_aim: array, length: float,
@@ -1735,15 +1536,17 @@ def heliostat2soltrace(hel: Heliostat, name: str,
     :param optic: The optical property to associate, a SolTrace OpticalSurface (soltracepy.OpticalSurface).
 
     :return: It returns an Element object.
+
+    [1] Santos et al., 2023. https://doi.org/10.1016/j.renene.2023.119380.
     """
 
-    # The ecs_origin and ecs_aim_pt of the Element Coordinate System #################
+    # The ecs_origin and ecs_aim_pt of the Element Coordinate System #####################
     # Remember that SolTrace uses the units in meters
     # the linear_fresnel module is defined in millimeters
     origin = hel.zx_center / 1000
     aim_pt = hel.ecs_aim_pt(rec_aim=rec_aim, SunDir=sun_dir) / 1000
     # A vector from the ecs_origin to the ecs_aim_pt defines the z-axis of the ECS
-    ##########################################################################
+    ######################################################################################
 
     # Creating auxiliary variables to implement #############################
     L = length / 1000  # convert to meters
@@ -1763,9 +1566,9 @@ def heliostat2soltrace(hel: Heliostat, name: str,
     else:
         # Current implementation (as of 12-May-23) ##################################################################
         # The old implementation was many times slower in the SolTrace 2012 version (and I do not know why).
-
         # This implementation approximates the cylindrical surface to the central section of a symmetrical parabola
         # in which the relation between parabola's focal length and circle curvature radius is R = 2f.
+        # This approximation would add negligible errors -- see Santos et al. [1]
 
         # Defining the aperture
         aperture[0:3] = 'r', hel.width / 1000, L
@@ -1975,191 +1778,3 @@ def evacuated_tube2soltrace(geometry: Absorber.evacuated_tube, name: str, length
 
 ########################################################################################################################
 ########################################################################################################################
-
-########################################################################################################################
-# LFR construction class and functions #################################################################################
-
-
-# def add_flat_absorber(self, absorber_center: array, absorber_width: float, absorber_axis=array([1, 0]),
-    #                       name='flat_absorber'):
-    #     """
-    #     A method do add a flat absorber (Absorber.flat object) to the linear Fresnel geometry.
-    #     It updates the 'absorber' attribute of the 'lfr_geometry' object.
-    #
-    #     :param name: The name to associate the flat absorber.
-    #     :param absorber_center: The center point of the flat absorber, a [x,y] point-array.
-    #     :param absorber_width: The width of the flat absorber, in millimeters
-    #     :param absorber_axis: The direction vector of the absorber
-    #
-    #     :return: Updates the 'absorber' attribute of the lfr geometry object.
-    #     """
-    #
-    #     self.absorber = Absorber.flat(name=name, center=absorber_center, width=absorber_width, axis=absorber_axis)
-    #
-    # def add_absorber_tube(self, tube_center: array, tube_radius: float, name='absorber_tube'):
-    #     """
-    #     A method to add an absorber tube (Absorber.tube object)  to the linear Fresnel geometry.
-    #     It updates the 'absorber' attribute of the 'lfr_geometry' object.
-    #
-    #     :param tube_center: The center point of the absorber tube, a point-array.
-    #     :param tube_radius: The absorber_radius of the absorber tube, in millimeters
-    #     :param name: The name to associate the absorber tube object.
-    #
-    #     :return: Updates the 'absorber' attribute of the lfr geometry object.
-    #     """
-    #
-    #     self.absorber = Absorber.tube(center=tube_center, radius=tube_radius, name=name)
-    #
-    # def add_evacuated_tube(self, tube_center: array,
-    #                        absorber_radius: float,
-    #                        outer_cover_radius: float,
-    #                        inner_cover_radius: float,
-    #                        name='evacuated_tube'):
-    #     """
-    #     A method to add an evacuated tube (Absorber.evacuated_tube object) to the linear Fresnel geometry.
-    #     It updates the 'absorber' attribute of the 'lfr_geometry' object.
-    #
-    #     :param tube_center:
-    #     :param absorber_radius:
-    #     :param outer_cover_radius:
-    #     :param inner_cover_radius:
-    #     :param name:
-    #
-    #     :return:
-    #     """
-    #
-    #     self.absorber = Absorber.evacuated_tube(name=name, center=tube_center, nbr_pts=121,
-    #                                             absorber_radius=absorber_radius,
-    #                                             outer_cover_radius=outer_cover_radius,
-    #                                             inner_cover_radius=inner_cover_radius)
-    #
-
-# class uniform_lfr_geometry:
-#
-#     def __init__(self, name: str, absorber_height: float, absorber_width: float,
-#                  mirror_width: float, nbr_mirrors=int, total_width: float = None, center_distance: float = None):
-#
-#         self.name = name
-#
-#         self.rec_height = abs(absorber_height)
-#         self.rec_width = abs(absorber_width)
-#         self.receiver = Absorber.flat(width=abs(absorber_width),
-#                                       center=array([0, 0, abs(absorber_height)]))
-#
-#         self.mirror_width = abs(mirror_width)
-#         self.nbr_mirrors = abs(nbr_mirrors)
-#         self.widths = ones(self.nbr_mirrors) * self.mirror_width
-#
-#         if total_width is not None and center_distance is None:
-#
-#             self.total_width = abs(total_width)
-#             self.center_distance = (self.total_width - self.mirror_width) / (self.nbr_mirrors - 1)
-#             self.centers = uniform_centers(total_width=self.total_width,
-#                                            mirror_width=self.mirror_width,
-#                                            number_mirrors=self.nbr_mirrors)
-#
-#         elif center_distance is not None and total_width is None:
-#
-#             self.center_distance = abs(center_distance)
-#             self.total_width = self.center_distance * (self.nbr_mirrors - 1) + self.mirror_width
-#             self.centers = uniform_centers(total_width=self.total_width,
-#                                            mirror_width=self.mirror_width,
-#                                            number_mirrors=self.nbr_mirrors)
-#
-#         elif center_distance is not None and total_width is not None:
-#
-#             if center_distance == (total_width - self.mirror_width) / (self.nbr_mirrors - 1):
-#
-#                 self.center_distance = abs(center_distance)
-#                 self.total_width = abs(total_width)
-#                 self.centers = uniform_centers(total_width=self.total_width,
-#                                                mirror_width=self.mirror_width,
-#                                                number_mirrors=self.nbr_mirrors)
-#             else:
-#                 raise ValueError('Class argument error: Values do not make sense')
-#         else:
-#             raise ValueError('Class argument error: Please add a total_width or center_distance')
-#
-#         self.filling_factor = self.widths.sum() / self.total_width
-#         self.rim_angle = arctan(0.5 * self.total_width / self.rec_height) * 180 / pi
-#
-#     def export_geometry(self, file_path):
-#
-#         file_full_path = Path(file_path, f'{self.name}_geometry.json')
-#
-#         d = {'name': self.name, 'width': self.mirror_width, 'nbr_mirrors': self.nbr_mirrors,
-#              'total_width': self.total_width,  'center_distance': self.center_distance,
-#              'receiver_height': self.rec_height, 'receiver_width': self.rec_width,
-#              'units': 'millimeters and degrees'}
-#
-#         with open(file_full_path, 'w') as file:
-#             json.dump(d, file)
-#
-#         return file_full_path
-
-
-# def boito_design_lfr(lfr_geometry, latitude: Angle, nbr_pts=121):
-#     n_pts = nbr_pts + 1 if nbr_pts % 2 == 0 else nbr_pts
-#
-#     centers = lfr_geometry.centers
-#     widths = lfr_geometry.widths
-#     sm = mid_point(lfr_geometry.receiver.s1, lfr_geometry.receiver.s2)
-#
-#     heliostats = []
-#
-#     for w, hc in zip(widths, centers):
-#         rr = boito_curvature(center=hc,
-#                              aim=sm,
-#                              lat=latitude)
-#
-#         hel = Heliostat(center=hc,
-#                         width=w,
-#                         absorber_radius=rr,
-#                         nbr_pts=n_pts)
-#
-#         heliostats.append(hel)
-#
-#     primary_field = PrimaryField(heliostats=heliostats)
-#
-#     lfr_concentrator = LFR(primary_field=primary_field, flat_absorber=lfr_geometry.receiver)
-#
-#     return lfr_concentrator
-#
-#
-# def uniform_lfr_flat_receiver(name: str, absorber_height: float, absorber_width: float,
-#                               mirror_width: float, nbr_mirrors=int, total_width: float = None,
-#                               center_distance: float = None):
-#
-#     return uniform_lfr_geometry(name=name, absorber_height=absorber_height, absorber_width=absorber_width,
-#                                 mirror_width=mirror_width, nbr_mirrors=nbr_mirrors,
-#                                 total_width=total_width, center_distance=center_distance)
-#
-#
-# def design_lfr(lfr_geometry: uniform_lfr_geometry, curvature_design='sun_ref', nbr_pts=121):
-#
-#     if curvature_design == 'sun_ref':
-#         lfr = rabl_design_lfr(lfr_geometry=lfr_geometry, design_position=Angle(deg=0), nbr_pts=nbr_pts)
-#     else:
-#         lfr = rabl_design_lfr(lfr_geometry=lfr_geometry, design_position='SR', nbr_pts=nbr_pts)
-#
-#     return lfr
-#
-#
-# def lfr_analytical_optical_efficiency(lfr: LFR, theta_t: float, theta_l: float, aim: array, length: float,
-#                                       sun_shape: RadialSource,
-#                                       primaries_property: OpticalProperty.reflector,
-#                                       absorber_property: OpticalProperty.flat_absorber,
-#                                       end_losses='no'):
-#
-#     rho_p = primaries_property.rho
-#     alpha_a = absorber_property.alpha
-#
-#     cum_eff = sun_shape.linear_effective_source(specular_error=primaries_property.spec_error,
-#                                                 slope_error=primaries_property.slope_error)
-#
-#     gamma = lfr.intercept_factor(theta_t=theta_t, theta_l=theta_l, aim=aim,
-#                                  length=length, cum_eff=cum_eff, end_losses=end_losses)
-#
-#     optical_efficiency = rho_p * alpha_a * gamma
-#
-#     return optical_efficiency

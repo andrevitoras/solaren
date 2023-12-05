@@ -10,7 +10,7 @@ from copy import deepcopy
 from pathlib import Path
 
 from numpy import array, linspace, pi, zeros, cos, sin, sign, cross, power, sqrt, tan, arctan, \
-    absolute, deg2rad, ones, arange
+    absolute, deg2rad, ones, arange, log
 
 from scipy.interpolate import interp1d, LinearNDInterpolator, InterpolatedUnivariateSpline
 from scipy.optimize import fsolve
@@ -859,6 +859,9 @@ class LFR:
 
         return self.field.acceptance_angle(theta_t=theta_t, flat_absorber=self.receiver, rec_aim=rec_aim,
                                            cum_eff=cum_eff, lv=lv, dt=dt, ref_value=ref_value)
+
+    def specific_cost(self):
+        return economic_analysis(field=self.field, s1=self.receiver.s1, s2=self.receiver.s2, dH=0.5)
 
     def export_geometry_data(self, file_path: Path = None, file_name: str = None):
 
@@ -1775,6 +1778,76 @@ def evacuated_tube2soltrace(geometry: Absorber.evacuated_tube, name: str, length
 
     return [outer_cover, inner_cover, absorber_tube]
 
+
+########################################################################################################################
+########################################################################################################################
+
+########################################################################################################################
+# Functions related to an economic analysis ############################################################################
+# See Moghimi et al. (2017), Solar Energy, Doi: 10.1016/J.SOLENER.2017.06.001
+
+
+def mirror_cost(w: float, Cmo=30.5):
+    return Cmo * (w / 0.5)
+
+
+def mirror_gap_cost(g: float, Cdo=11.5):
+    return Cdo * (g / 0.01)
+
+
+def elevation_cost(od: float, Ceo=19.8, Nt=1):
+    eta_ci = array([1.4, 1, 1])
+    Ci = array([14.2, 0.9, 4.6])
+
+    num = 0
+    for i in range(len(Ci)):
+        num += (Ci[i] * Nt / Ceo) * (od / 0.219) ** eta_ci[i]
+
+    eta_ce = log(num) / (log(od / 0.219))
+
+    return Ceo * power(od / 0.219, eta_ce)
+
+
+def receiver_cost(od: float, Cro=654.0, Nt=1):
+    eta_ci = array([2, 0.9, 0.7, 1.4, 0.6, 0.6])
+    Ci = array([116.2, 56.6, 116.4, 136.5, 26.4, 112.6])
+
+    num = 0
+    for i in range(len(Ci)):
+        num += (Ci[i] * Nt / Cro) * (od / 0.219) ** eta_ci[i]
+
+    eta_cr = log(num) / (log(od / 0.219))
+
+    return Cro * power(od / 0.219, eta_cr)
+
+
+def economic_analysis(field: PrimaryField, s1: array, s2: array, dH=1.0):
+    od = dst(s1, s2) / pi / 1.0e3
+
+    # if len(field) == 2:
+    #     heliostats, _ = field
+    # else:
+    #     heliostats = field
+
+    sm = mid_point(s1, s2)
+    H = sm[-1] / 1.0e3
+
+    # widths = array(heliostats_widths(field=heliostats)) / 1.0e3
+    widths = field.widths
+    widths_cost = array([mirror_cost(w=w) for w in widths])
+
+    # centers = primaries_center(field=heliostats)
+    centers = field.centers
+    s = [dst(centers[i], centers[i + 1]) for i in range(len(centers) - 1)]
+    gaps = array([s[i] - 0.5 * (widths[i] + widths[i + 1]) for i in range(len(centers) - 1)]) / 1.0e3
+    gaps_cost = array([mirror_gap_cost(g) for g in gaps])
+
+    Ce = elevation_cost(od=od)
+    Cr = receiver_cost(od=od)
+
+    specific_cost = (sum(widths_cost, 0) + Ce * (H + dH) + sum(gaps_cost, 0) + Cr) / sum(widths, 0)
+
+    return specific_cost
 
 ########################################################################################################################
 ########################################################################################################################

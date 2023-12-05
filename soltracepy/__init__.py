@@ -2,39 +2,48 @@
 Created by André Santos (andrevitoras@gmail.com / avas@uevora.pt)
 The codes are related to SolTrace commands and scripts to run ray-tracing simulations.
 
-They are related to writing a script file (.lk) which configures, trace rays and export the simulation results.
-They include all steps needed to perform a ray trace simulation: (1) Sun configuration (rays source), (2) surfaces
-optical properties, (3) geometrical elements definitions,(4) rays configurations, (5) export results.
+This module is related to writing SolTrace scripts (.lk) and input files (.stinput) which configures and run the
+ray-tracing simulations, as well as exporting the selected results. Therefore, it includes defining SolTrace main boxes:
+(1) Sun: rays source.
+(2) Optics: surfaces optical properties.
+(3) Geometry: geometrical elements definitions.
+(4) Trace: rays configurations.
+(5) Intersections: export results.
+
+It is important to highlight that SolTrace units are defined in meters and milliradians.
 """
 
 import json
-import os
 import subprocess
 from pathlib import Path
+from typing import TextIO
 
-from numpy import array, zeros, pi
+from numpy import array, pi, zeros
 
 soltrace_paths = {'strace': Path('C:\\SolTrace\\3.1.0\\x64\\strace.exe'),
                   'soltrace2': Path('C:\\SolTrace\\2012.7.9\\SolTrace.exe'),
                   'soltrace3': Path('C:\\SolTrace\\3.1.0\\x64\\soltrace.exe')}
 
 
-# The 'soltrace3' key refers to the path of the version 3.1.0, available in the NREL website.
-# This version is a GUI which# cannot run an LK script from the prompt.
-# The 'soltrace2' key refers to an GUI old version (2012.7.9) of Soltrace# which can run an LK script from the prompt.
-# This version was sent by Thomas Fasquelle. Finally, the 'soltrace3' is a CLI version that can only run stinput files
-# from the prompt following a precise command structure.
-# For more details, please see the Notion documentation.
-
-# ToDo: Complete the class, methods, and functions documentations.
-
-#######################################################################################################################
-# Classes  ############################################################################################################
+########################################################################################################################
+# Classes  #############################################################################################################
 
 
-class SoltraceSun:
-
+class Sun:
+    """
+    This class does not consider a point source at a finite distance, neither uses Latitude,  Day, and Hour option
+    Therefore, 'ptsrc'=false, and 'useldh' = false, respectively.
+    """
     def __init__(self, sun_dir: array, profile: str = None, size: float = None, user_data: array = None):
+        """
+
+        :param sun_dir: an [x,y,z] array to represent the sun vector
+        :param profile: the radiance profile representing sunbeam divergence ('pillbox', 'gaussian', or 'user' defined)
+        :param size: the representative size of sunbeam, in milliradians. Half-width for a 'pillbox' and
+
+        :param user_data: for a 'user' defined profile, an array of values with the normalized radiance profile,
+        such as [[0, 1.], [theta_2, value_2], ..., [theta_n, value_n]], where theta is in milliradians.
+        """
 
         if profile == 'gaussian' or profile == 'g':
             self.shape = "'g'"
@@ -54,18 +63,15 @@ class SoltraceSun:
 
         self.vector = sun_dir
 
-    def as_script(self, script):
+    def as_script(self, script: TextIO):
         """
         This method writes the lines of code of an LK script to define the Sun box of SolTrace.
 
-        :param script: A file object to append the LK lines of code.
-        :return:
+        :param script: a file object to append the LK lines of code.
+        :return: None
         """
-        # By definition, this function does not consider a point source at a finite distance, neither uses Latitude,
-        # Day, and Hour option -- this is why 'ptsrc'=false, and 'useldh' = false, respectively.
 
         script.write("// ---- Setting the Sun (source of rays) options  -----------------------\n\n")
-
         script.write('sunopt({\n')
         script.write(f"'useldh'=false, 'ptsrc'=false,\n")
         script.write(f"'x'={self.vector[0]}, 'y'={self.vector[1]}, 'z'={self.vector[2]},\n")
@@ -82,12 +88,14 @@ class SoltraceSun:
 
         script.write("// -----------------------------------------------------------------------\n\n")
 
-    def as_stinput(self, file):
+        return None
+
+    def as_stinput(self, file: TextIO):
         """
         This function writes the lines of code related to a stinput file which configures a SolTrace Sun.
 
-        :param file: The stinput file in which the code will be written
-        :return:
+        :param file: the stinput file in which the code will be written
+        :return: None
         """
 
         if self.shape == "'g'":
@@ -107,18 +115,34 @@ class SoltraceSun:
         else:
             raise 'Error in the inputted SolTrace Sun (Source of rays) data'
 
+        return None
+
 
 class OpticInterface:
     """
-    An OpticInterface object is the main element of an Optical Surface, and is the core element of the Optics box.
-    It defines the front or back side of an OpticalSurface object. Its instances are related to the input data needed.
-
-    Its methods implement the lines of code for both a LK script or STINPUT file
+    An OpticInterface object is the main element of an OpticalSurface object, and is the core element of the Optics box.
+    It is used for the settings of front or back sides of an optical property of the Optics box.
     """
-    # ToDo: Check how to implement an angular variable reflectivity
 
-    def __init__(self, name: str, reflectivity: float, transmissivity: float, slp_error=0., spec_error=0.,
-                 front=True, real_refractive_index=1.0, img_refractive_index=1.2):
+    def __init__(self,
+                 name: str,
+                 reflectivity: float, transmissivity: float,
+                 slp_error=0., spec_error=0.,
+                 front=True,
+                 real_refractive_index=1.0, img_refractive_index=1.2):
+
+        """
+        :param name: the name of the optical property.
+        :param reflectivity: the reflectivity value, between 0 and 1.
+        :param transmissivity: the transmissivity value, between 0 and 1.
+
+        :param slp_error: the surface slope error, in milliradians.
+        :param spec_error: the surface specular error, in milliradians.
+
+        :param front: a boolean sign to indicate for a front (True) or back (False) side.
+        :param real_refractive_index:
+        :param img_refractive_index:
+        """
 
         self.name = name
         self.ref = reflectivity
@@ -135,16 +159,18 @@ class OpticInterface:
 
         self.st_parameters = [0] * 15  # useful to construct the stinput code lines
 
-    def as_script(self, script):
-        script.write("// ---- Set Surface Property  -------------------\n")
-        # Adds a surface optical property with a given name
+    def as_script(self, script: TextIO):
+        script.write("// ---- Set Interface -------------------\n")
+        # Adds a surface side (front or back) optical property with a given name
         script.write(f"opticopt('{self.name}', {self.side}, " + "{'dist'='g',\n")
         script.write(f"'refl'={self.ref}, 'trans'={self.tran}, 'errslope'={self.err_slop},'errspec'={self.err_spec},\n")
         script.write(f"'refractr'={self.n_real}, 'refracti'={self.n_img}, 'apstop'={self.ap_stop},\n")
         script.write(f"'difford'={self.diff_ord}, 'grating'={list(self.grt_cff)}" + "});\n")
         script.write("// --------------------------------------------\n\n")
 
-    def as_stinput(self, file):
+        return None
+
+    def as_stinput(self, file: TextIO):
         self.st_parameters[0:3] = self.ap_stop, self.surf_num, self.diff_ord
         self.st_parameters[3:7] = self.ref, self.tran, self.err_slop, self.err_spec
         self.st_parameters[7:9] = self.n_real, self.n_img
@@ -155,14 +181,16 @@ class OpticInterface:
             file.write(f"\t{p}")
         file.write(f"\n")
 
+        return None
+
 
 class OpticalSurface:
     """
-    An OpticalSurface object is the main element of the Optics box of SolTrace.
+    An OpticalSurface object is used to represent the main element of the Optics box of SolTrace, which has front and
+    back interfaces.
 
-    An OpticalSurface has two sides: front and back. The front side is defined by the positive direction of the z-axis
-    of the Element Coordinate System (ECS) of the SolTrace Element in which the property is applied to.
-
+    It is important to highlight that the front side is defined by the positive direction of the z-axis of the Element
+    Coordinate System (ECS) of the Element in which the property is applied to.
     """
 
     def __init__(self, name: str, front_side: OpticInterface, back_side: OpticInterface):
@@ -170,21 +198,23 @@ class OpticalSurface:
         self.front = front_side
         self.back = back_side
 
-    def as_script(self, script):
+    def as_script(self, script: TextIO):
         """
         A method to write this object as the correspondent lines of code of an LK script.
-
-        :param script: The script file to write the LK code
+        :param script: the script file to write the LK code
+        :return None
         """
 
-        script.write("// ---- Add Surface Property -----------------------------------------------\n\n")
+        script.write("// ---- Add Surface Optical Property -----------------------------------------------\n\n")
         script.write(f"addoptic('{self.name}');\n")
         self.front.as_script(script=script)
         self.back.as_script(script=script)
 
         script.write("// -------------------------------------------------------------------------\n\n")
 
-    def as_stinput(self, file):
+        return None
+
+    def as_stinput(self, file: TextIO):
         """
         A method to write this object as the correspondent lines of code of a Soltrace input file.
 
@@ -194,6 +224,8 @@ class OpticalSurface:
         self.front.as_stinput(file=file)
         self.back.as_stinput(file=file)
 
+        return None
+
 
 class Optics:
     """
@@ -202,9 +234,13 @@ class Optics:
     """
 
     def __init__(self, properties: list):
+
+        assert all([isinstance(prop, OpticalSurface) for prop in properties]),\
+            "A non OpticalSurface object was added in the properties argument of the Optics class!!!"
+
         self.properties = properties
 
-    def as_script(self, script):
+    def as_script(self, script: TextIO):
 
         script.write(f"// ---- Setting the Optics box ----------------------------------------------------------- \n\n")
         script.write(f"clearoptics();\n")
@@ -214,38 +250,51 @@ class Optics:
 
         script.write(f"// --------------------------------------------------------------------------------------- \n\n")
 
-    def as_stinput(self, file):
+        return None
+
+    def as_stinput(self, file: TextIO):
 
         file.write(f"OPTICS LIST COUNT    {len(self.properties)}\n")
         for prop in self.properties:
             prop.as_stinput(file=file)
 
+        return None
+
 
 class Element:
     """
-    The Element class stand to hold the data for the definition of a SolTrace Element in the Geometry box.
+    The Element class stand to hold the data for the definition of a SolTrace Element of a Stage in the Geometry box.
 
     The Element is defined in a Stage and has a coordinate system attached to it: the Element Coordinate System (ECS).
     Obviously, the ECS is defined regarding the Stage Coordinate System (SCS) by the direction of its z-axis and a
-    rotation about this axis (z-rot).
-    The z-axis of the ECS is defined by the vector from the ECS ecs_origin to the ECS aim-point, so that:
-    z = 'ecs_aim_pt' - 'ecs_origin'. Of course, these points and vectors are defined in the SCS.
+    rotation about this axis (z-rot). The z-axis of the ECS is defined by the vector from the ECS origin to the
+    ECS aim-point, so that:
+    z = 'ecs_aim_pt' - 'ecs_origin'.
+    Of course, these points and vectors are defined in the SCS. Thus, the definition of the ECS z-axis, together with a
+    rotation around it, the z-rot argument, completely defines the relative orientation of the ECS regarding the SCS.
     """
 
-    def __init__(self, name: str, ecs_origin: array, ecs_aim_pt: array, z_rot: float,
-                 aperture: list, surface: list, optic: OpticalSurface, reflect=True, enable=True):
+    def __init__(self,
+                 name: str,
+                 ecs_origin: array, ecs_aim_pt: array, z_rot: float,
+                 aperture: list, surface: list,
+                 optic: OpticalSurface,
+                 reflect=True, enable=True):
 
         """
+        :param name: the name of the Element object, to be inserted in the comment argument.
 
-        :param name:
-        :param ecs_origin: The Element Coordinate System (ECS) ecs_origin, a point-array.
-        :param ecs_aim_pt: The Element Coordinate System (ECS) aim-point, a point-array.
-        :param z_rot:
-        :param aperture:
-        :param surface:
-        :param optic:
-        :param reflect: A boolean sign to indicate if the Element is reflective (True) or refractive (False)
-        :param enable: A boolean sign to indicate if the Element is to be considered (True) or not (False) in the
+        :param ecs_origin: an [x,y,z] array representing the ECS origin.
+        :param ecs_aim_pt: an [x,y,z] array representing the ECS aim-pt.
+        :param z_rot: the rotation around the z-axis of the ECS, in degrees.
+
+        :param aperture: a list with the settings of the element aperture.
+        :param surface: a list with the settings of the element surface.
+
+        :param optic: the optical property that rules the interaction of rays with the element.
+
+        :param reflect: a boolean sign to indicate if the Element is reflective (True) or refractive (False)
+        :param enable: a boolean sign to indicate if the Element is to be considered (True) or not (False) in the
         ray-tracing simulation.
         """
 
@@ -259,12 +308,12 @@ class Element:
         self.interaction = "reflection" if reflect else "refraction"
         self.en = 'true' if enable else 'false'
 
+        # auxiliary attributes to make it easy to write the code lines of an input file
         self.EN = 1 if enable else 0
         self.INT = 2 if reflect else 1
-
         self.st_parameters = list(ecs_origin) + list(ecs_aim_pt) + list([z_rot]) + self.aperture
 
-    def as_script(self, script, el_index: int):
+    def as_script(self, script: TextIO, el_index: int):
         script.write(f"// -- Add an element to the current stage -----------------\n\n")
         script.write(f"addelement();\n")  # It appends a new element in the current stage
         script.write(
@@ -275,7 +324,7 @@ class Element:
         script.write(f"'optic'='{self.optic_name}', 'comment'='{self.name}'" + "});\n")
         script.write(f"// --------------------------------------------------------\n\n")
 
-    def as_stinput(self, file):
+    def as_stinput(self, file: TextIO):
 
         file.write(f"{self.EN}")
         for p in self.st_parameters:
@@ -303,32 +352,38 @@ class Stage:
     """
     The Stage class stand to hold the data for the definition of a SolTrace Stage in the Geometry box.
 
-    The Stage is defined regarding the Global Coordinate System (GCS) and has a coordinate system attached to it:
+    A Stage is defined regarding the Global Coordinate System (GCS) and has a coordinate system attached to it:
     the Stage Coordinate System (SCS).
     The SCS is defined regarding the GCS by the direction of its z-axis and a rotation about this axis (z-rot).
-    The z-axis of the SCS is defined by the vector from the SCS ecs_origin to the SCS aim-point, so that:
-    z = 'scs_aim_pt' - 'scs_origin'. Of course, these points and vectors are defined in the GCS.
-
+    The z-axis of the SCS is defined by the vector from the SCS origin to the SCS aim-point, so that:
+    z = 'scs_aim_pt' - 'scs_origin'.
+    Of course, these points and vectors are defined in the GCS. Thus, the definition of the SCS z-axis, together with a
+    rotation around it, the z-rot argument, completely defines the relative orientation of the SCS regarding the GCS.
     """
 
-    def __init__(self, name: str, elements: list, scs_origin=array([0, 0, 0]), scs_aim_pt=array([0, 0, 1]), z_rot=0,
+    def __init__(self,
+                 name: str,
+                 elements: list,
+                 scs_origin=array([0, 0, 0]), scs_aim_pt=array([0, 0, 1]), z_rot=0,
                  active=True, virtual=False, rays_multi_hit=True, trace_through=False):
         """
 
-        :param name:
-        :param elements: A list with Element objects within the Stage.
-        :param scs_origin:
-        :param scs_aim_pt:
-        :param z_rot:
-        :param active:
-        :param virtual:
+        :param name: a name to represent the Stage
+        :param elements: a list of Element objects that are defined in the Stage.
+
+        :param scs_origin: an [x,y,z] array representing the SCS origin.
+        :param scs_aim_pt: an [x,y,z] array representing the SCS aim-pt.
+        :param z_rot: the rotation around the z-axis of the SCS, in degrees.
+
+        :param active: a boolean sign to set as an active Stage (True) or not (False).
+        :param virtual: a boolean sign to set if rays interact with elements in the Stage (True) or not (False).
+
         :param rays_multi_hit:
         :param trace_through:
         """
 
-        for el in elements:
-            if type(el) != Element:
-                raise "A non Element object was added in the elements argument of the Stage instance"
+        assert all([isinstance(el, Element) for el in elements]),\
+            "A non Element object was added in the elements argument of the Stage class"
 
         self.name = name
         self.x, self.y, self.z = scs_origin
@@ -347,10 +402,11 @@ class Stage:
 
         self.st_parameters += ['VIRTUAL', VT] + ['MULTIHIT', MH] + ['ELEMENTS', len(elements)] + ['TRACETHROUGH', TT]
 
-    def as_script(self, script):
+    def as_script(self, script: TextIO):
 
         if len(self.elements) == 0:
-            raise "The Stage has no elements to interact with the rays. Please, add Elements to the elements argument"
+            raise ValueError("The Stage has no elements to interact with the rays. "
+                             "Please, add Elements to the elements argument")
 
         script.write("// ---- Setting a Stage for the Geometries to be added --------------\n\n")
         script.write(f"addstage('{self.name}');\n")
@@ -367,7 +423,9 @@ class Stage:
 
         script.write("// -----------------------------------------------------------------\n\n")
 
-    def as_stinput(self, file):
+        return None
+
+    def as_stinput(self, file: TextIO):
         file.write(f"STAGE\tXYZ")
         for p in self.st_parameters:
             file.write(f"\t{p}")
@@ -376,6 +434,8 @@ class Stage:
 
         for el in self.elements:
             el.as_stinput(file=file)
+
+        return None
 
 
 class Geometry:
@@ -392,11 +452,15 @@ class Geometry:
 
         script.write(f"// --------------------------------------------------------------------------------------- \n\n")
 
+        return None
+
     def as_stinput(self, file):
         file.write(f"STAGE LIST COUNT \t{len(self.stages)}\n")
 
         for stg in self.stages:
             stg.as_stinput(file=file)
+
+        return None
 
 
 class Trace:
@@ -405,16 +469,19 @@ class Trace:
 
     """
 
-    def __init__(self, rays: float, cpus: int, seed=-1, sunshape=True, optical_errors=True, point_focus=False,
+    def __init__(self, rays: float, cpus: int,
+                 seed=-1,
+                 sunshape=True, optical_errors=True, point_focus=False,
                  simulate=True):
         """
+        :param rays: the desired number of rays intersections.
+        :param cpus: the number of cpus to be used in the simulation
+        :param seed: the seed number of the Monte Carlo routine of random numbers
 
-        :param rays:
-        :param cpus:
-        :param seed:
-        :param sunshape:
-        :param optical_errors:
-        :param point_focus:
+        :param sunshape: a boolean sign to consider (True) or not (False) the sunshape.
+        :param optical_errors: a boolean sign to consider (True) or not (False) optical errors.
+        :param point_focus: a boolean sign to consider (True) or not (False) as a point focus optic.
+        :param simulate: a boolean sign to run (True) or not (False) the simulation.
         """
 
         self.rays = int(rays)
@@ -428,7 +495,7 @@ class Trace:
         self.simulate = simulate
 
     def as_script(self, script):
-        script.write('// ---- Setting the Ray Tracing simulation -------------------------------------------------\n\n')
+        script.write('// ---- Setting the Ray-tracing simulation -------------------------------------------------\n\n')
 
         script.write('traceopt({ \n')
         script.write(f"'rays'={self.rays}, 'maxrays'={self.max_rays},\n")
@@ -440,11 +507,16 @@ class Trace:
 
         script.write(f"//-----------------------------------------------------------------------------------------\n\n")
 
+        return None
+
 
 class ElementStats:
 
-    def __init__(self, stats_name: str, stage_index: int, element_index: int,
-                 dni=1000, x_bins=15, y_bins=15, final_rays=True):
+    def __init__(self,
+                 stats_name: str,
+                 stage_index: int, element_index: int,
+                 dni=1000, x_bins=15, y_bins=15,
+                 final_rays=True):
         """
         This class holds the data to select an Element from a Stage and to export its rays (flux) stats data after a
         simulation and then export it to a json file -- see elementstats() LK function.
@@ -452,7 +524,7 @@ class ElementStats:
 
         :param stage_index: The index number of the Stage (the first Stage has an index of 0).
         :param element_index: The index number of the element within the Stage (the first Element has an index of 0).
-        :param stats_name: The name of the json file to be exported with the element stats.
+        :param stats_name: The variable_name of the json file to be exported with the element stats.
 
         :param dni: The solar direct normal irradiance, in W/m2.
         :param x_bins: The number of grid elements in the x-axis to split the element surface.
@@ -577,124 +649,22 @@ class ElementStats:
 
         return element_stats_full_path
 
-
 ########################################################################################################################
 ########################################################################################################################
 
-
-# def surface_as_spline_file(x_values: array, y_values: array, file_name: str, file_path: Path):
-#
-#     file_full_path = Path(file_path, f'{file_name}.csi')
-#
-#     file = open(file_full_path, 'w')
-#     file.write()
-#
-#     return file_full_path
-
-
-########################################################################################################################
-# Sun functions ########################################################################################################
-
-# def sun2soltrace(sun: Sun):
-#
-#     return SoltraceSun(sun_dir=sun.sun_vector, profile=sun.sun_shape.profile, size=sun.sun_shape.size)
-
-
-########################################################################################################################
-########################################################################################################################
-
-########################################################################################################################
-# Optics functions #####################################################################################################
-
-
-def reflective_surface(name: str, rho: float, slope_error: float, spec_error: float):
-
-    front = OpticInterface(name=name, reflectivity=rho, transmissivity=0,
-                           slp_error=slope_error, spec_error=spec_error, front=True)
-    back = OpticInterface(name=name, reflectivity=0, transmissivity=0,
-                          slp_error=slope_error, spec_error=spec_error, front=False)
-
-    return OpticalSurface(name=name, front_side=front, back_side=back)
-
-
-def secondary_surface(name: str, rho: float, slope_error: float, spec_error: float):
-    front = OpticInterface(name=name, reflectivity=rho, transmissivity=0,
-                           slp_error=slope_error, spec_error=spec_error, front=True)
-    back = OpticInterface(name=name, reflectivity=rho, transmissivity=0,
-                          slp_error=slope_error, spec_error=spec_error, front=False)
-
-    return OpticalSurface(name=name, front_side=front, back_side=back)
-
-
-def flat_absorber_surface(name: str, alpha: float):
-    front = OpticInterface(name=name, reflectivity=1 - alpha, transmissivity=0, front=True)
-    back = OpticInterface(name=name, reflectivity=1, transmissivity=0, front=False)
-
-    return OpticalSurface(name=name, front_side=front, back_side=back)
-
-
-def absorber_tube_surface(name: str, alpha: float):
-    front = OpticInterface(name=name, reflectivity=1 - alpha, transmissivity=0, front=True)
-    back = OpticInterface(name=name, reflectivity=1 - alpha, transmissivity=0, front=False)
-
-    return OpticalSurface(name=name, front_side=front, back_side=back)
-
-
-def transmissive_surface(name: str, tau: float, nf: float, nb: float):
-
-    front = OpticInterface(name=name, reflectivity=0, transmissivity=tau, real_refractive_index=nf, front=True,
-                           spec_error=0.92, slp_error=0.2)
-    back = OpticInterface(name=name, reflectivity=0, transmissivity=1, real_refractive_index=nb, front=False,
-                          spec_error=0.92, slp_error=0.2)
-
-    return OpticalSurface(name=name, front_side=front, back_side=back)
-
-
-def cover_surfaces(tau: float, name='cover', refractive_index=1.52):
-
-    # tau_s = tau**0.5
-
-    out_surf = transmissive_surface(name=f'{name}_outer_cover', tau=tau, nf=refractive_index, nb=1.0)
-    inn_surf = transmissive_surface(name=f'{name}_inner_cover', tau=1, nf=1.0, nb=refractive_index)
-
-    return out_surf, inn_surf
-
-#######################################################################################################################
-#######################################################################################################################
-
-########################################################################################################################
-# Geometry functions ###################################################################################################
-
-
-def flat_element(name: str, ecs_origin: array, ecs_aim_pt: array, width: array, length: float,
-                 optic: OpticalSurface, reflect=True, enable=True):
-
-    aperture = list([0] * 9)
-    aperture[0:3] = 'r', width, length
-
-    surface = list([0] * 9)
-    surface[0] = 'f'
-
-    elem = Element(name=name, ecs_origin=ecs_origin, ecs_aim_pt=ecs_aim_pt, z_rot=0,
-                   optic=optic, aperture=aperture, surface=surface,
-                   reflect=reflect, enable=enable)
-
-    return elem
-
-
-########################################################################################################################
-########################################################################################################################
 
 ########################################################################################################################
 # Script functions #####################################################################################################
 
-def create_script(file_path, file_name='optic'):
+
+def create_script(file_path, file_name='optic') -> TextIO:
     """
-    This function creates a lk script file with the inputted name. This file will be created at the current work
-    directory if a full path is not inputted at the file_name parameter -- the standard directory in Python.
+    This function creates a lk script file with the inputted variable_name.
+    This file will be created at the current work directory if a full path is not inputted at the file_name parameter --
+     the standard directory in Python.
 
     :param file_path: THe Path where the script should be created.
-    :param file_name: The name of the lk script file to be created.
+    :param file_name: The variable_name of the lk script file to be created.
 
     :return: It returns an opened LK file where the lines of code will be writen.
     """
@@ -706,31 +676,32 @@ def create_script(file_path, file_name='optic'):
     return script
 
 
-def soltrace_script(file_path: Path, file_name: str, sun: SoltraceSun, optics: Optics, geometry: Geometry,
-                    trace: Trace, stats: ElementStats):
+def soltrace_script(file_path: Path, file_name: str,
+                    sun: Sun,
+                    optics: Optics,
+                    geometry: Geometry,
+                    trace: Trace,
+                    stats: ElementStats) -> Path:
 
     """
     This functions creates a full SolTrace LK script file.
 
-    :param file_path: The path of the LK script file.
-    :param file_name: The name of the LK script file.
-    :param sun: A Sun object, refers to the SolTrace Sun bax.
-    :param optics: An Optics object, refers to the SolTrace Optics box
-    :param geometry: A Geometry object, refers to the SolTrace Geometry box, with Stages and Elements.
-    :param trace: A Trace object, refers to the SolTrace Trace box
-    :param stats: A ElementStats objects, refers to the rays and flux stats of an Element within a Stage.
+    :param file_path: the path of the LK script file.
+    :param file_name: the variable_name of the LK script file.
+    :param sun: a Sun object, refers to the SolTrace Sun bax.
+    :param optics: an Optics object, refers to the SolTrace Optics box
+    :param geometry: a Geometry object, refers to the SolTrace Geometry box, with Stages and Elements.
+    :param trace: a Trace object, refers to the SolTrace Trace box
+    :param stats: an ElementStats object, refers to the rays and flux stats of an Element within a Stage.
 
     :return: The full path of the LK script.
     """
 
     # Check if the file path is an existing directory #####
-    # If not, it creates the directory.
-    if not file_path.is_dir():
-        os.makedirs(file_path)
+    file_path.mkdir(parents=True, exist_ok=True)
     ######################################################
 
     # Created the script file and keep it open ###########
-
     # The function 'create_script' uses this code to create the file.
     script_full_path = Path(file_path, f"{file_name}.lk")
 
@@ -739,13 +710,13 @@ def soltrace_script(file_path: Path, file_name: str, sun: SoltraceSun, optics: O
     ######################################################
 
     # Write the SolTrace objects as the correspondent script codes ###########################################
-    # It also close the script file in order to enable its usage by other programs (e.g., the SolTrace exe
-
     sun.as_script(script=script)
     optics.as_script(script=script)
     geometry.as_script(script=script)
     trace.as_script(script=script)
     stats.as_script(script=script, file_path=file_path)
+
+    # Close the script file in order to enable its usage by other programs.
     script.close()
     ###########################################################################################################
 
@@ -753,16 +724,20 @@ def soltrace_script(file_path: Path, file_name: str, sun: SoltraceSun, optics: O
 
 
 def run_soltrace(lk_file_full_path: Path, soltrace_path=Path(f"C:\\SolTrace\\2012.7.9\\SolTrace.exe")):
-
     """
-    This function opens the SolTrace version from 2012 and runs the LK script.
+    This functions runs a SolTrace LK script from the windows cmd. It does not work for the SolTrace 3.01 version,
+    currently available at NREL's website. However, it works for the 2012.7.9 version.
 
-    :param lk_file_full_path: The full path of the LK file.
-    :param soltrace_path: The full path of the SolTrace executable file.
+    :param lk_file_full_path: the full path of the LK script file.
+    :param soltrace_path: the full path of the SolTrace executable file.
+
+    :return None
     """
 
     cmd = f"{soltrace_path}" + ' -s ' + f"{lk_file_full_path} -h"
     subprocess.run(cmd, shell=True, check=True, capture_output=True)
+
+    return None
 
 
 def read_element_stats(full_file_path: Path):
@@ -778,108 +753,6 @@ def read_element_stats(full_file_path: Path):
         stats = json.loads(data_file.read())
 
     return stats
-
-
-def create_csi_file(curve_pts: array, knots_derivatives: array, file_path: Path, file_name: str):
-    """
-    This function creates the file used by SolTrace to construct an element by a rotationally symmetric cubic spline.
-    The arguments of this function must be in meters, as SolTraces work with such unit.
-
-    :param curve_pts: The curve points as [x, y] point-arrays.
-    :param knots_derivatives: The first derivatives at the first and last points of the curve.
-    :param file_path: The path in which to create the spline file.
-    :param file_name: The name of the spline file.
-
-    :return: The full path of the spline file.
-    """
-
-    # Curve points and knots derivatives ######
-    x_values, y_values = curve_pts.T
-    df_1, df_n = knots_derivatives
-    ###########################################
-
-    # Creating the rotationally symmetric cubic spline file path #####
-    # A 'csi' extension file for SolTrace to correctly read it
-    full_file_path = Path(file_path, f"{file_name}.csi")
-    ##################################################################
-
-    # Creating file and writing the data into it ################################################################
-    file = open(full_file_path, 'w')
-    # The first line must contain the number of points which defines the surface
-    file.write(f"{x_values.shape[0]}\n")
-    for x, y in zip(x_values, y_values):
-        # write in the file the point coordinates values in meters
-        file.write(f"{x}\t{y}\n")
-
-    # the last line should contain the first derivatives at both edge knots.
-    file.write(f"{df_1}\t{df_n}")  # writes the first derivatives at both edges knots
-    file.close()  # closes the file
-    ############################################################################################################
-
-    return full_file_path
-
-
-# def script_change_element_aim(script, element_index: int, aim_vector: array):
-#     ax, ay, az = aim_vector
-#     script.write(f"elementopt({element_index}, " + "{" + f"'ax'={ax}, 'ay'={ay}, 'az'={az}" + "});\n")
-#
-#     pass
-
-
-########################################################################################################################
-########################################################################################################################
-
-########################################################################################################################
-# Input files functions ################################################################################################
-
-
-def create_stinput(file_path, file_name='optic'):
-    full_file_path = Path(file_path, f"{file_name}.stinput")
-    file = open(full_file_path, 'w')
-    file.write("# SOLTRACE VERSION 3.1.0 INPUT FILE\n")
-
-    return file
-
-
-def soltrace_file(file_path: Path, file_name: str, sun: SoltraceSun, optics: Optics, geometry: Geometry):
-    if not file_path.is_dir():
-        os.makedirs(file_path)
-
-    st_file = create_stinput(file_path=file_path, file_name=file_name)
-
-    sun.as_stinput(file=st_file)
-    optics.as_stinput(file=st_file)
-    geometry.as_stinput(file=st_file)
-
-    st_file.close()
-
-    full_file_path = Path(file_path, f'{file_name}.stinput')
-
-    return full_file_path
-
-
-def run_strace(file_path, trace: Trace, strace_path='C:\\SolTrace\\3.1.0\\x64\\strace.exe'):
-    """
-    :param file_path: Full path of a .stinput file to be run.
-    :param trace: An object Trace. It contains the data to run the simulations.
-    :param strace_path: Full path of the SolTrace CLI version, i.e., the strace.exe file.
-
-    :return: This function runs the CLI version of the SolTrace and also runs the .stinput file. At the end, it creates
-    a ray data file -- as the CSV file that can be saved from the SolTrace GUI version.
-    """
-
-    ss = 1 if trace.sunshape == 'true' else 0
-    er = 1 if trace.errors == 'true' else 0
-    pf = 1 if trace.point_focus == 'true' else 0
-
-    if file_path.is_file():
-        cmd = f'{strace_path} {str(file_path)} {trace.rays} {trace.max_rays} {trace.seed} {ss} {er} {pf}'
-        subprocess.run(cmd, shell=True, check=True, capture_output=True)
-    else:
-        print("The path passed as argument is not of a file")
-
-#######################################################################################################################
-#######################################################################################################################
 
 
 class ElementFlux:
@@ -960,3 +833,59 @@ class ElementFlux:
         """
 
         return self.flux_map / self.bin_area / dni
+
+########################################################################################################################
+########################################################################################################################
+
+
+########################################################################################################################
+# Input files functions ################################################################################################
+
+
+def create_stinput(file_path, file_name='optic'):
+    full_file_path = Path(file_path, f"{file_name}.stinput")
+    file = open(full_file_path, 'w')
+    file.write("# SOLTRACE VERSION 3.1.0 INPUT FILE\n")
+
+    return file
+
+
+def soltrace_file(file_path: Path, file_name: str,
+                  sun: Sun, optics: Optics, geometry: Geometry):
+
+    file_path.mkdir(parents=True, exist_ok=True)
+
+    st_file = create_stinput(file_path=file_path, file_name=file_name)
+
+    sun.as_stinput(file=st_file)
+    optics.as_stinput(file=st_file)
+    geometry.as_stinput(file=st_file)
+    st_file.close()
+
+    full_file_path = Path(file_path, f'{file_name}.stinput')
+
+    return full_file_path
+
+
+def run_strace(file_path, trace: Trace, strace_path='C:\\SolTrace\\3.1.0\\x64\\strace.exe'):
+    """
+    :param file_path: Full path of a .stinput file to be run.
+    :param trace: An object Trace. It contains the data to run the simulations.
+    :param strace_path: Full path of the SolTrace CLI version, i.e., the strace.exe file.
+
+    :return: This function runs the CLI version of the SolTrace and also runs the .stinput file. At the end, it creates
+    a ray data file -- as the CSV file that can be saved from the SolTrace GUI version.
+    """
+
+    ss = 1 if trace.sunshape == 'true' else 0
+    er = 1 if trace.errors == 'true' else 0
+    pf = 1 if trace.point_focus == 'true' else 0
+
+    if file_path.is_file():
+        cmd = f'{strace_path} {str(file_path)} {trace.rays} {trace.max_rays} {trace.seed} {ss} {er} {pf}'
+        subprocess.run(cmd, shell=True, check=True, capture_output=True)
+    else:
+        print("The path passed as argument is not of a file!")
+
+########################################################################################################################
+########################################################################################################################

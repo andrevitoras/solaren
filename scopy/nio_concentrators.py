@@ -532,10 +532,10 @@ def oommen_cpc(tube_radius: float, outer_glass_radius: float, theta_a: float, nu
     return curve_pts
 
 
-t_radius = 35
-g_radius = 57.5
-half_acceptance = 56.0
-cpc_points = oommen_cpc(tube_radius=t_radius, outer_glass_radius=g_radius, theta_a=half_acceptance, number_pts=150)
+# t_radius = 35
+# g_radius = 57.5
+# half_acceptance = 56.0
+# cpc_points = oommen_cpc(tube_radius=t_radius, outer_glass_radius=g_radius, theta_a=half_acceptance, number_pts=150)
 
 #
 # tube_points = t_radius * array([[sin(t), cos(t)] for t in linspace(0, 2*pi, 50)])

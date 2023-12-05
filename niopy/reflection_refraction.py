@@ -86,6 +86,7 @@ def rfx_nrm(i, r) -> array:
     Given the incident (v1) and reflected (v2) rays, returns the normal to the surface for the case of reflection.
     :param i:
     :param r:
+
     :return: the normal to the surface, given an incident ray i and reflected ray r.
     """
     # TODO: check if it works
@@ -94,13 +95,14 @@ def rfx_nrm(i, r) -> array:
 
 def dfl(i, ns, n1, n2) -> array:
     """
-    A surface separating two media of refraction indices n1 and n2 has normal nrm. This function Reflects
-        or Refracts a ray with direction vi, depending on if n1=n2 or not.
+    A surface separating two media of refraction indices n1 and n2 has normal nrm.
+    This function Reflects or Refracts a ray with direction vi, depending on if n1=n2 or not.
 
     :param i:
     :param ns:
     :param n1:
     :param n2:
+
     :return:
     """
     # TODO: check if it works
@@ -110,11 +112,13 @@ def dfl(i, ns, n1, n2) -> array:
 def dfl_nrm(i, r, n1, n2) -> array:
     """
     Given the refraction indices n1 and n2, the incident (v1) and refracted (v2) rays, returns the normal to
-        the surface for both the reflection (n1=n2) and refraction (n1!=n2)
+    the surface for both the reflection (n1=n2) and refraction (n1!=n2)
+
     :param i:
     :param r:
     :param n1:
     :param n2:
+
     :return:
     """
     # TODO: check if it works

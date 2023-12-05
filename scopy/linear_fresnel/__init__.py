@@ -10,7 +10,7 @@ from copy import deepcopy
 from pathlib import Path
 
 from numpy import array, linspace, pi, zeros, cos, sin, sign, cross, power, sqrt, tan, arctan, \
-    absolute, deg2rad, ones, arange
+    absolute, deg2rad, ones, arange, log
 
 from scipy.interpolate import interp1d, LinearNDInterpolator, InterpolatedUnivariateSpline
 from scipy.optimize import fsolve
@@ -26,8 +26,10 @@ from scopy.nio_concentrators import symmetric_cpc2tube, cpc_type, symmetric_cpc2
 
 from scopy.sunlight import sun2lin, SiteData
 
-from soltracepy import OpticalSurface, Element, reflective_surface, \
-    secondary_surface, absorber_tube_surface, flat_absorber_surface, cover_surfaces, flat_element
+from soltracepy import OpticalSurface, Element
+
+from soltracepy.auxiliary import reflective_surface, secondary_surface, absorber_tube_surface, \
+    flat_absorber_surface, cover_surfaces, flat_element
 
 from utils import dic2json
 
@@ -47,7 +49,7 @@ class OpticalProperty:
 
         def __init__(self, name: str, rho=1.0, slope_error=0., spec_error=0.):
             """
-            :param name: The name of the property
+            :param name: The variable_name of the property
             :param rho: The reflector hemispherical reflectance. It should be a value between 0 and 1.
             :param slope_error: The slope error of the reflector surface, in radians.
             :param spec_error: THe specular error of the reflector surface, in radians.
@@ -156,7 +158,7 @@ class OpticalProperty:
 
         def __init__(self, name: str, rho=1.0, slope_error=1.e-4, spec_error=1.e-4):
             """
-            :param name: The name of the property.
+            :param name: The variable_name of the property.
             :param rho: The reflector hemispherical reflectance. It should be a value between 0 and 1.
             :param slope_error: The slope error of the reflector surface, in mrad.
             :param spec_error: THe specular error of the reflector surface, in mrad.
@@ -245,6 +247,7 @@ class Absorber:
         def __init__(self, center: array,
                      absorber_radius: float, inner_cover_radius: float, outer_cover_radius: float,
                      name='evacuated_tube', nbr_pts=121):
+
             self.name = name
 
             self.radius = abs(absorber_radius)
@@ -711,7 +714,7 @@ class PrimaryField:
     def intercept_factor(self, flat_absorber: Absorber.flat,
                          theta_t: float, theta_l: float,
                          length: float = 120000.,
-                         rec_aim: array = None, cum_eff=None, end_losses=False):
+                         rec_aim: array = None, cum_eff=None, end_losses=False) -> float:
 
         s1 = flat_absorber.s1
         s2 = flat_absorber.s2
@@ -859,6 +862,9 @@ class LFR:
 
         return self.field.acceptance_angle(theta_t=theta_t, flat_absorber=self.receiver, rec_aim=rec_aim,
                                            cum_eff=cum_eff, lv=lv, dt=dt, ref_value=ref_value)
+
+    def specific_cost(self):
+        return economic_analysis(field=self.field, s1=self.receiver.s1, s2=self.receiver.s2, dH=0.5)
 
     def export_geometry_data(self, file_path: Path = None, file_name: str = None):
 
@@ -1262,7 +1268,7 @@ class uniform_lfr_geometry:
     def export_geometry(self, file_path):
         file_full_path = Path(file_path, f'{self.name}_geometry.json')
 
-        d = {'name': self.name, 'mirror_width': self.mirror_width, 'nbr_mirrors': self.nbr_mirrors,
+        d = {'variable_name': self.name, 'mirror_width': self.mirror_width, 'nbr_mirrors': self.nbr_mirrors,
              'total_width': self.total_width, 'center_distance': self.center_distance,
              'units': 'millimeters'}
 
@@ -1529,7 +1535,7 @@ def heliostat2soltrace(hel: Heliostat, name: str,
     This function considers a Heliostat object and returns it as a Soltrace Element object (see soltracepy.Element).
 
     :param hel: Heliostat object.
-    :param name: A name of the element to be inserted in the 'comment' argument.
+    :param name: A variable_name of the element to be inserted in the 'comment' argument.
     :param sun_dir: A 3D vector-array which represents the sun direction.
     :param rec_aim: The aiming point at the receiver used as reference for the tracking, a point-array.
     :param length: The length of the heliostat.
@@ -1775,6 +1781,76 @@ def evacuated_tube2soltrace(geometry: Absorber.evacuated_tube, name: str, length
 
     return [outer_cover, inner_cover, absorber_tube]
 
+
+########################################################################################################################
+########################################################################################################################
+
+########################################################################################################################
+# Functions related to an economic analysis ############################################################################
+# See Moghimi et al. (2017), Solar Energy, Doi: 10.1016/J.SOLENER.2017.06.001
+
+
+def mirror_cost(w: float, Cmo=30.5):
+    return Cmo * (w / 0.5)
+
+
+def mirror_gap_cost(g: float, Cdo=11.5):
+    return Cdo * (g / 0.01)
+
+
+def elevation_cost(od: float, Ceo=19.8, Nt=1):
+    eta_ci = array([1.4, 1, 1])
+    Ci = array([14.2, 0.9, 4.6])
+
+    num = 0
+    for i in range(len(Ci)):
+        num += (Ci[i] * Nt / Ceo) * (od / 0.219) ** eta_ci[i]
+
+    eta_ce = log(num) / (log(od / 0.219))
+
+    return Ceo * power(od / 0.219, eta_ce)
+
+
+def receiver_cost(od: float, Cro=654.0, Nt=1):
+    eta_ci = array([2, 0.9, 0.7, 1.4, 0.6, 0.6])
+    Ci = array([116.2, 56.6, 116.4, 136.5, 26.4, 112.6])
+
+    num = 0
+    for i in range(len(Ci)):
+        num += (Ci[i] * Nt / Cro) * (od / 0.219) ** eta_ci[i]
+
+    eta_cr = log(num) / (log(od / 0.219))
+
+    return Cro * power(od / 0.219, eta_cr)
+
+
+def economic_analysis(field: PrimaryField, s1: array, s2: array, dH=1.0):
+    od = dst(s1, s2) / pi / 1.0e3
+
+    # if len(field) == 2:
+    #     heliostats, _ = field
+    # else:
+    #     heliostats = field
+
+    sm = mid_point(s1, s2)
+    H = sm[-1] / 1.0e3
+
+    # widths = array(heliostats_widths(field=heliostats)) / 1.0e3
+    widths = field.widths
+    widths_cost = array([mirror_cost(w=w) for w in widths])
+
+    # centers = primaries_center(field=heliostats)
+    centers = field.centers
+    s = [dst(centers[i], centers[i + 1]) for i in range(len(centers) - 1)]
+    gaps = array([s[i] - 0.5 * (widths[i] + widths[i + 1]) for i in range(len(centers) - 1)]) / 1.0e3
+    gaps_cost = array([mirror_gap_cost(g) for g in gaps])
+
+    Ce = elevation_cost(od=od)
+    Cr = receiver_cost(od=od)
+
+    specific_cost = (sum(widths_cost, 0) + Ce * (H + dH) + sum(gaps_cost, 0) + Cr) / sum(widths, 0)
+
+    return specific_cost
 
 ########################################################################################################################
 ########################################################################################################################

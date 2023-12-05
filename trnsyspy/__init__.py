@@ -13,7 +13,7 @@ def change_parameters(template_path: Path, file_path: Path, file_name: str, keys
     This function modify the desired keywords in a dck file to the desired values
     :param template_path: The full path of the template dck file to be modified.
     :param file_path: the path of where the generated dck file should be created
-    :param file_name: the name of the generated dck file
+    :param file_name: the variable_name of the generated dck file
     :param keys: the tagged keywords that will be changed
     :param values: the values that will replace the tagged keywords.
     :return:

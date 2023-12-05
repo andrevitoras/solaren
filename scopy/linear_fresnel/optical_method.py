@@ -561,7 +561,7 @@ def local_collimated_analysis(p: float64[:], i: int64, n: int64, centers: float6
     The performance metrics are the intercept factor and optical losses such as shading, blocking, defocusing, and
     end-losses.
 
-    This function, as it name indicates, considers a collimated sunlight model.
+    This function, as it variable_name indicates, considers a collimated sunlight model.
 
     :param p: A [x, 0, z] point-array in the surface of a primary mirror.
     :param i: The index which represents the heliostat in the primary field.

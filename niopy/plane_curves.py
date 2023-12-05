@@ -6,7 +6,8 @@ from numpy import dot, cos, sin, array, arcsin, sqrt, pi, zeros, arctan, linspac
 from scipy.interpolate import UnivariateSpline, splprep, splev
 from niopy.geometric_transforms import dst, ang_h, ang_p, V, nrm, R, mid_point
 from pathlib import Path
-from soltracepy import Element, OpticalSurface, create_csi_file
+from soltracepy import Element, OpticalSurface
+from soltracepy.auxiliary import create_csi_file
 
 
 class PlaneCurve:
@@ -148,7 +149,8 @@ class PlaneCurve:
         This method returns the PlaneCurve object as a set of flat Elements objects. That is, it approximates two
         consecutive contour points as a straight line and construct a flat Element between them.
 
-        :param name: The core name to give for each Element, inputted in the 'comment' argument of the SolTrace Element.
+        :param name: The core variable_name to give for each Element, inputted in the 'comment' argument of the SolTrace
+        Element.
         :param length: The length of the Elements, in millimeters.
         :param optic: The optical property associated with the Elements, as an OpticalSurface object.
 
@@ -204,7 +206,7 @@ class PlaneCurve:
         it creates a 'csi' file to be read by SolTrace and returns the full path of such a file.
 
         :param file_path: The file path of where the 'csi' file should be created.
-        :param file_name: The name of the 'csi' file to be created.
+        :param file_name: The variable_name of the 'csi' file to be created.
 
         :return: The file full path
         """
@@ -517,4 +519,3 @@ def ume(f: array, r: float, g: array, p: array):
 
 def parametric_points(f: callable, phi_1: float, phi_2: float, nbr_pts: int):
     return array([f(x) for x in linspace(start=phi_1, stop=phi_2, num=nbr_pts)])
-

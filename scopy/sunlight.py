@@ -46,7 +46,7 @@ from scipy.signal import fftconvolve
 from scipy.stats import norm, uniform
 
 from niopy.geometric_transforms import R
-from soltracepy import SoltraceSun
+from soltracepy import Sun
 from utils import dic2json
 
 
@@ -93,7 +93,7 @@ class SiteData:
 
         file_full_path = Path(files_path, f"{file_name}.json")
 
-        out_dic = {'name': self.name, 'latitude': self.lat, 'longitude': self.lon,
+        out_dic = {'variable_name': self.name, 'latitude': self.lat, 'longitude': self.lon,
                    'dni_sum': self.dni_sum, 'tmy_data': str(tmy_data_file_path)}
 
         dic2json(d=out_dic, file_path=files_path, file_name=file_name)
@@ -114,7 +114,7 @@ class RadialSource:
 
     def __init__(self, name: str = 'ES', profile: str = None, size: float = None, user_data: array = None):
         """
-        :param name: source name.
+        :param name: source variable_name.
 
         :param profile: source profile.
         Examples are: pillbox ('p'), Gaussian ('g'), Buie ('b') or user-defined source 'u'.
@@ -224,7 +224,7 @@ class RadialSource:
 
     def to_soltrace(self, sun_dir: array):
         # OBS: SolTrace Sun box definitions considers units in milliradians (mrad).
-        # return SoltraceSun(sun_dir=sun_dir, profile=self.profile, size=self.size * 1e3)
+        # return Sun(sun_dir=sun_dir, profile=self.profile, size=self.size * 1e3)
         return source2soltrace(source=self, sun_dir=sun_dir)
 
     def export2dic(self):
@@ -752,7 +752,7 @@ def pdfs_convolution(f, g, out_callable=True):
     return pdf
 
 
-def source2soltrace(source: RadialSource, sun_dir: array) -> SoltraceSun:
+def source2soltrace(source: RadialSource, sun_dir: array) -> Sun:
 
     if source.profile == 'buie' or source.profile == 'user':
 
@@ -762,10 +762,10 @@ def source2soltrace(source: RadialSource, sun_dir: array) -> SoltraceSun:
 
         # SolTrace reads the angular displacement in milliradians
         sunshape_profile.T[:] = x_range * 1e3, source.radial_distribution(x_range)
-        sun = SoltraceSun(sun_dir=sun_dir, profile='u', user_data=sunshape_profile)
+        sun = Sun(sun_dir=sun_dir, profile='u', user_data=sunshape_profile)
     else:
         # SolTrace reads the size of a pillbox or a Gaussian sunshape in milliradians
-        sun = SoltraceSun(sun_dir=sun_dir, profile=source.profile, size=source.size*1e3)
+        sun = Sun(sun_dir=sun_dir, profile=source.profile, size=source.size * 1e3)
 
     return sun
 

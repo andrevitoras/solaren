@@ -19,11 +19,13 @@ class PlaneCurve:
     methods are defined/constructed regarding this.
     """
 
-    def __init__(self, curve_pts: array, curve_center: array):
+    def __init__(self,
+                 curve_pts: array,
+                 curve_center: array):
 
         """
-        :param curve_pts: the curve x-y points, as [x,y] or [x, 0, z] point-arrays.
-        :param curve_center: the curve center, as an [x, y] or [x, 0, z] point-array.
+        :param curve_pts: the curve x-y points, as [x,y] or [x,0,z] point-arrays.
+        :param curve_center: the curve center, as an [x,y] or [x,0,z] point-array.
         """
 
         # Ensure that points of the plane curve are in ascending order at the x coordinate ######
@@ -135,7 +137,7 @@ class PlaneCurve:
         # New version ####################################################
         # ToDo: Check if this works!!!!!
         # Generalization to include curves that do not fit in the mathematical definition of a function y = y(x).
-        # That is, y(x1) will only and only yield a unique value: y1 = y(x1). E.g., curve points of a circle.
+        # That is, x1 will only and only yield a unique value: y1 = y(x1). E.g., curve points of a circle.
 
         slope = self.slope2surface()
         normals = array([nrm(V(beta)) for beta in slope])
@@ -149,10 +151,9 @@ class PlaneCurve:
         This method returns the PlaneCurve object as a set of flat Elements objects. That is, it approximates two
         consecutive contour points as a straight line and construct a flat Element between them.
 
-        :param name: The core variable_name to give for each Element, inputted in the 'comment' argument of the SolTrace
-        Element.
-        :param length: The length of the Elements, in millimeters.
-        :param optic: The optical property associated with the Elements, as an OpticalSurface object.
+        :param name: the variable to give for each Element, inputted in the 'comment' argument.
+        :param length: the length of the Elements, in millimeters.
+        :param optic: the optical property associated with the Elements, as an OpticalSurface object.
 
         :return: A list of Elements objects.
         """
@@ -168,7 +169,7 @@ class PlaneCurve:
 
             # Calculates the ecs_origin and the aim-point of the flat element #####
             origin = mid_point(p=pt_a, q=pt_b)
-            aim_pt = origin + R(-pi / 2).dot(pt_b - pt_a)
+            aim_pt = origin + R(-pi / 2).dot(pt_b - pt_a) * dst(p=pt_a, q=pt_b)
             ###################################################################
 
             # Converts to meters and to a [x, 0, z] arrays #########
@@ -177,12 +178,12 @@ class PlaneCurve:
             ########################################################
 
             # Calculates the width of the flat Element ####
-            width = dst(p=pt_a, q=pt_b) / 1000
+            width = round(dst(p=pt_a, q=pt_b) / 1000, 4)
             ###############################################
 
             # Defining the aperture of the Element ########
             aperture = list([0] * 9)
-            aperture[0:3] = 'r', width, length / 1000
+            aperture[0:3] = 'r', width, round(length / 1000, 4)
             ###############################################
 
             # Defining the surface of the Element #########
@@ -192,7 +193,7 @@ class PlaneCurve:
 
             # Appending the current Element to the elements list ############
             elements += [Element(name=f"{name}_{i}",
-                                 ecs_origin=origin, ecs_aim_pt=aim_pt, z_rot=0,
+                                 ecs_origin=origin.round(4), ecs_aim_pt=aim_pt.round(4), z_rot=0,
                                  aperture=aperture, surface=surface,
                                  optic=optic,
                                  reflect=True, enable=True)]
@@ -264,13 +265,15 @@ class PlaneCurve:
 ########################################################################################################################
 # Auxiliary functions ##################################################################################################
 
-def concatenate_curves(base_curve: array, next_curve: array, precision=0.001):
+def concatenate_curves(base_curve: array, next_curve: array, precision=0.0001):
 
     k = 0
     while dst(next_curve[k][0], base_curve[-1][0]) <= precision:
         k = k + 1
 
     concatenated_curve = array(base_curve.tolist() + next_curve[k:].tolist())
+
+    # concatenated_curve = array(base_curve.tolist() + next_curve.tolist())
 
     return concatenated_curve
 
@@ -292,11 +295,11 @@ def par(alpha: float, f: array, p: array):
     This function returns a parametric function of a parabola tilted by an angle 'alpha' to the horizontal,
     with focus 'f' and that goes through a point 'p'.
 
-    :param alpha: Parabola's tilt angle from the horizontal, in radians.
-    :param f: Parabola's focal point, an array.
-    :param p: Point which the parabola goes through, an array.
+    :param alpha: the parabola's tilt angle from the horizontal, in radians.
+    :param f: the parabola's focal point, an array.
+    :param p: a point which the parabola goes through, an array.
 
-    :return: A parametric function (a Python callable).
+    :return: a parametric function (a Python callable).
     """
 
     def fc(x):
@@ -310,11 +313,11 @@ def par(alpha: float, f: array, p: array):
 def eli(f: array, g: array, p: array):
 
     """
-    :param f: Ellipse focus.
-    :param g: Ellipse focus.
-    :param p: Point which the ellipse goes through.
-    :return: This function returns a parametric function of an ellipse with focus at 'f' and 'g'.
-    and that goes through a point 'p'.
+    :param f: one of the ellipse's focus.
+    :param g: one of the ellipse's focus.
+    :param p: a point which the ellipse goes through.
+
+    :return: a parametric function of an ellipse with focus at 'f' and 'g' and that goes through a point 'p'.
     """
     # ToDo: check if it works.
     alpha = ang_h(g - f)
@@ -406,12 +409,12 @@ def wmp(alpha: float, f: array, r: float, p: array):
     This function returns a parametric function of a winding macrofocal parabola tilted by an angle 'alpha'
     to the horizontal, with macrofocus centered at 'f' and absorber_radius 'r', and that goes through point 'p'.
 
-    :param alpha: Macrofocal parabola tilt angle from the horizontal, in radians.
-    :param f: Macrofocus center point.
-    :param r: Macrofocus absorber_radius.
-    :param p: A point the macrofocal parabola passes through.
+    :param alpha: the macrofocal parabola tilt angle from the horizontal, in radians.
+    :param f: the macrofocus center point.
+    :param r: the macrofocus absorber_radius.
+    :param p: a point the macrofocal parabola passes through.
 
-    :return: A parametric function.
+    :return: a parametric function.
     """
 
     phi_p = ang_p(p - f, V(alpha)) + arcsin(r / dst(p, f))
@@ -432,12 +435,12 @@ def ump(alpha: float, f: array, r: float, p: array):
     This function returns a parametric function of an unwinding macrofocal parabola tilted by an angle 'alpha'
     to the horizontal, with macrofocus centered at 'f' and absorber_radius 'r', and that goes through point 'p'.
 
-    :param alpha: Macrofocal parabola tilt angle from the horizontal, in radians.
-    :param f: Macrofocus center point.
-    :param r: Macrofocus absorber_radius.
-    :param p: A point the macrofocal parabola passes through.
+    :param alpha: the macrofocal parabola tilt angle from the horizontal, in radians.
+    :param f: the macrofocus center point.
+    :param r: the macrofocus absorber_radius.
+    :param p: a point the macrofocal parabola passes through.
 
-    :return: A parametric function.
+    :return: a parametric function.
     """
 
     phi_p = ang_p(p - f, V(alpha)) - arcsin(r / dst(p, f))
@@ -459,12 +462,12 @@ def wme(f: array, r: float, g: array, p: array):
     This function returns a parametric function of a winding macrofocal ellipse with macrofocus centered at 'f'
     with absorber_radius 'r', point focus at 'g' and that goes through point 'p'.
 
-    :param f: Ellipse macrofocus center point.
-    :param r: Macrofocus absorber_radius.
-    :param g: Ellipse point focus.
-    :param p: A point that the macrofocal ellipse passes through.
+    :param f: the ellipse macrofocus center point.
+    :param r: the macrofocus absorber_radius.
+    :param g: the ellipse point focus.
+    :param p: a point that the macrofocal ellipse passes through.
 
-    :return: A parametric function.
+    :return: a parametric function.
     """
 
     alpha = ang_h(g - f)
@@ -488,12 +491,12 @@ def ume(f: array, r: float, g: array, p: array):
     This function returns a parametric function of an unwinding macrofocal ellipse with macrofocus centered
     at 'f' with absorber_radius 'r', point focus at 'g' and that goes through point 'p'.
 
-    :param f: Ellipse macrofocus center point.
-    :param r: Macrofocus absorber_radius.
-    :param g: Ellipse point focus.
-    :param p: A point that the macrofocal ellipse passes through.
+    :param f: the ellipse macrofocus center point.
+    :param r: the macrofocus absorber_radius.
+    :param g: the ellipse point focus.
+    :param p: a point that the macrofocal ellipse passes through.
 
-    :return: A parametric function.
+    :return: a parametric function.
     """
 
     alpha = ang_h(g - f)
@@ -514,8 +517,13 @@ def ume(f: array, r: float, g: array, p: array):
     return fc
 
 ########################################################################################################################
-# FUNCTIONS ############################################################################################################
+
+########################################################################################################################
+# Auxiliary functions ##################################################################################################
 
 
 def parametric_points(f: callable, phi_1: float, phi_2: float, nbr_pts: int):
     return array([f(x) for x in linspace(start=phi_1, stop=phi_2, num=nbr_pts)])
+
+########################################################################################################################
+########################################################################################################################

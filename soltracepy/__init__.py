@@ -129,7 +129,7 @@ class OpticInterface:
                  reflectivity: float, transmissivity: float,
                  slp_error=0., spec_error=0.,
                  front=True,
-                 real_refractive_index=1.0, img_refractive_index=1.2):
+                 real_refractive_index=1.0, img_refractive_index=1.0):
 
         """
         :param name: the name of the optical property.
@@ -485,7 +485,7 @@ class Trace:
         """
 
         self.rays = int(rays)
-        self.max_rays = 100 * self.rays
+        self.max_rays = 150 * self.rays
         self.cpus = int(cpus)
         self.sunshape = 'true' if sunshape else 'false'
         self.errors = 'true' if optical_errors else 'false'
@@ -527,17 +527,19 @@ class ElementStats:
         :param stats_name: The variable_name of the json file to be exported with the element stats.
 
         :param dni: The solar direct normal irradiance, in W/m2.
-        :param x_bins: The number of grid elements in the x-axis to split the element surface.
-        :param y_bins: The number of grid elements in the y-axis to split the element surface.
+        :param x_bins: The number of grid elements (>=2) in the ECS x-axis to split the element surface.
+        :param y_bins: The number of grid elements (>=2) in the ECS y-axis to split the element surface.
         """
 
         self.name = stats_name
         self.stg_index = abs(stage_index)
         self.ele_index = abs(element_index)
-
         self.dni = abs(dni)
-        self.x_bins = abs(x_bins)
-        self.y_bins = abs(y_bins)
+
+        # the bins in x and y directions of the Element Coordinate System
+        # they should be >=2, otherwise, the elementstats() functions returns a <null> table.
+        self.x_bins = abs(x_bins) if abs(x_bins) >= 2 else 2
+        self.y_bins = abs(y_bins) if abs(y_bins) >= 2 else 2
         self.final_rays = 'true' if final_rays else 'false'
 
         self.file_full_path = None
@@ -578,6 +580,9 @@ class ElementStats:
 
         # For the 2012 SolTrace version ##############################################################
         else:
+            # The 2012.7.9 version of SolTrace does not have any functions that writes an LK-table as a json file
+            # Therefore, this set of codes are needed to write this flux stats file.
+
             # Writing a json file to export the element stats
             script.write(f"filename = '{self.name}_stats.json';\n")
             script.write("stats_file = open(filename, 'w');\n")
@@ -597,7 +602,7 @@ class ElementStats:
             # Selecting some keys from the LK tabel 'absorber_data' previously defined. These are float data keys.
             # These keys will be exported to the json file.
             script.write('float_keys = ["min_flux", "bin_size_x", "power_per_ray", "bin_size_y", "peak_flux",\n')
-            script.write('"ave_flux", "radius", "num_rays"];\n')
+            script.write('"ave_flux", "sigma_flux", "uniformity", "radius", "num_rays"];\n')
             ############################################################################################################
 
             # Writing the LK code to write in the json file the keys and values of the LK-Table ########################
@@ -649,12 +654,164 @@ class ElementStats:
 
         return element_stats_full_path
 
+
+class ElementFlux:
+    """
+    This class stands to hold the data from an element stats file.
+
+    The elementstats() LK function returns an LK table -- which is similar to a Python dictionary -- with the rays data
+    from a selected Element within a Stage.
+
+    See the class ElementStats() and the function read_element_stats() in this module.
+    """
+
+    def __init__(self, stats_file: Path):
+
+        # It should be noticed that units in SolTrace are in meters (m) and Watts (W).
+
+        # Saving input data as attributes #######################
+        # An attribute to hold the file path
+        self.file_path = stats_file
+
+        # saving stats file (json) as dictionary
+        self.stats = read_element_stats(self.file_path)
+        #########################################################
+
+        # Other attributes ########################################
+        # surface radius
+        self.radius = self.stats['radius']
+
+        # the power, in kW, carried by each ray
+        self.ray_power = self.stats['power_per_ray'] / 1000.
+        ###########################################################
+
+        # Bin attributes ######################################################
+        # the size of the element surface bin
+        self.xbin_size = self.stats['bin_size_x']  # in m
+        self.ybin_size = self.stats['bin_size_y']  # in m
+        self.bin_area = self.xbin_size * self.ybin_size  # in m2
+
+        # position of the bins center
+        self.xbin_values = array(self.stats['xvalues'])
+        self.ybin_values = array(self.stats['yvalues'])
+        self.rbin_values = (180/pi) * (self.xbin_values / self.radius)
+        #######################################################################
+
+        # Flux attributes #######################################################
+        # total flux, in KW
+        self.total_flux = self.stats['num_rays'] * self.ray_power
+
+        # the flux, in kW, per bin
+        self.flux_per_bin = array(self.stats['flux']).T * self.ray_power
+
+        # the flux density distribution per bin, in kW/m2
+        self.flux_map = self.flux_per_bin / self.bin_area
+
+        # the average flux, in kW/m2
+        self.flux_mean = self.flux_map.mean()
+
+        # the flux standard deviation, in kW/m2
+        self.flux_std = self.flux_map.std()
+
+        # flux in the x-axis of the Element Coordinate System
+        self.flux_x_distribution = self.flux_map.mean(axis=0)
+        self.flux_x_std = self.flux_x_distribution.std()
+        self.flux_x_uniformity = self.flux_x_std / self.flux_mean
+
+        # Flux in the y-axis of the Element Coordinate System
+        self.flux_y_distribution = self.flux_map.mean(axis=1)
+        self.flux_y_std = self.flux_y_distribution.std()
+        self.flux_y_uniformity = self.flux_y_std / self.flux_mean
+        ###########################################################################
+
+        # SolTrace metrics for the flux distribution ###########
+        self.average_flux = self.stats['ave_flux']
+        self.sigma_flux = self.stats['sigma_flux']
+        self.uniformity = self.stats['uniformity']
+        #########################################################
+
+        ##########################################################################
+        # OLD IMPLEMENTATION #####################################################
+
+        # # The size of the bins in x and y axes ################################
+        # self.x_bin = self.stats['bin_size_x']
+        # self.y_bin = self.stats['bin_size_y']
+        #
+        # # radial size of the x-bin, in radians
+        # self.radius = self.stats['radius']
+        # self.r_bin = (180/pi) * (self.x_bin / self.radius) if self.radius > 0 else 0
+        #
+        # # The area of a bin, in m2
+        # self.bin_area = self.x_bin * self.y_bin
+        # ######################################################################
+        #
+        # # The axis coordinates of the center of the bins ########
+        # self.x_values = array(self.stats['xvalues'])
+        # self.y_values = array(self.stats['yvalues'])
+        #
+        # # Radial coordinates of the bins, in radians
+        # self.r_values = (180/pi) * (self.x_values / self.radius) \
+        #     if self.radius > 0 \
+        #     else zeros(self.x_values.shape[0])
+        # #########################################################
+        #
+        # # The power that each ray carry #############
+        # self.ray_power = self.stats['power_per_ray']
+        # #############################################
+        #
+        # # The total flux #################################
+        # # in Watts (W)
+        # self.flux = self.stats['num_rays'] * self.ray_power
+        # ##################################################
+        #
+        # # Rays per bin #######################################
+        # # the number of rays that strikes each bin
+        # self.rays = array(self.stats['flux'])
+        # ######################################################
+        #
+        # # Flux intensity per bin #######################################
+        # # Values are in Watts per square meter (W/m2)
+        # self.flux_map = self.rays * self.ray_power / self.bin_area
+        #
+        # ######################################################
+        #
+        # # SolTrace metrics for the flux distribution #########
+        # self.average_flux = self.stats['ave_flux']
+        # self.sigma_flux = self.stats['sigma_flux']
+        # self.uniformity = self.stats['uniformity']
+        # ######################################################
+        ##########################################################################
+        ##########################################################################
+
+    def concentration_map(self, dni: float):
+        """
+        A method to calculate the concentration map in the Element.
+        Actually, it returns the flux concentration factor per bin.
+
+        :param dni: The direct normal irradiance, in W/m2.
+
+        :return: An array of arrays.
+        """
+
+        return self.flux_map / self.bin_area / dni
+
+
 ########################################################################################################################
 ########################################################################################################################
 
 
 ########################################################################################################################
 # Script functions #####################################################################################################
+
+
+def rays_file(script: TextIO):
+    # ToDo: Create the LK lines of code to export a rays file as a plain text file.
+    #  It only has a function to export it as a binary file.
+
+    script.write('intersections = nintersectc();\n')
+    script.write('for (i = 0; i < intersections; i++) {\n')
+    script.write('')
+    script.write('};')
 
 
 def create_script(file_path, file_name='optic') -> TextIO:
@@ -681,7 +838,8 @@ def soltrace_script(file_path: Path, file_name: str,
                     optics: Optics,
                     geometry: Geometry,
                     trace: Trace,
-                    stats: ElementStats) -> Path:
+                    stats: ElementStats,
+                    version=2012) -> Path:
 
     """
     This functions creates a full SolTrace LK script file.
@@ -693,6 +851,7 @@ def soltrace_script(file_path: Path, file_name: str,
     :param geometry: a Geometry object, refers to the SolTrace Geometry box, with Stages and Elements.
     :param trace: a Trace object, refers to the SolTrace Trace box
     :param stats: an ElementStats object, refers to the rays and flux stats of an Element within a Stage.
+    :param version: an argument to indicate which version (2012 or 3.0) of SolTrace will run the script.
 
     :return: The full path of the LK script.
     """
@@ -714,7 +873,7 @@ def soltrace_script(file_path: Path, file_name: str,
     optics.as_script(script=script)
     geometry.as_script(script=script)
     trace.as_script(script=script)
-    stats.as_script(script=script, file_path=file_path)
+    stats.as_script(script=script, file_path=file_path, soltrace_version=version)
 
     # Close the script file in order to enable its usage by other programs.
     script.close()
@@ -755,86 +914,7 @@ def read_element_stats(full_file_path: Path):
     return stats
 
 
-class ElementFlux:
-    """
-    This class stands to hold the data from an element stats file.
-
-    The elementstats() LK function returns an LK table -- which is similar to a Python dictionary -- with the rays data
-    from a selected Element within a Stage.
-    See the class ElementStats() and the function read_element_stats() in this module.
-
-    """
-
-    def __init__(self, stats_file: Path):
-
-        # An attribute to hold the file path ####
-        self.file_path = stats_file
-        #########################################
-
-        # Reading the stats as a dictionary #########
-        stats = read_element_stats(self.file_path)
-        #############################################
-
-        # The size of the bins in x and y axes ################################
-        self.x_bin = stats['bin_size_x']
-        self.y_bin = stats['bin_size_y']
-
-        # radial size of the x-bin, in radians
-        self.radius = stats['radius']
-        self.r_bin = (180/pi) * (self.x_bin / self.radius) if self.radius > 0 else 0
-
-        # The area of a bin, in m2
-        self.bin_area = self.x_bin * self.y_bin
-        ######################################################################
-
-        # The axis coordinates of the center of the bins ########
-        self.x_values = array(stats['xvalues'])
-        self.y_values = array(stats['yvalues'])
-
-        # Radial coordinates of the bins, in radians
-        self.r_values = (180/pi) * (self.x_values / self.radius) \
-            if self.radius > 0 \
-            else zeros(self.x_values.shape[0])
-        #########################################################
-
-        # The power that each ray carry #############
-        self.ray_power = stats['power_per_ray']
-        #############################################
-
-        # The total flux #################################
-        # In Watts
-        self.flux = stats['num_rays'] * self.ray_power
-        ##################################################
-
-        # Rays per bin #######################################
-        self.rays = array(stats['flux'])
-        ######################################################
-
-        # Flux per bin #######################################
-        # Values are in Watts
-        self.flux_map = self.rays * self.ray_power
-
-        ######################################################
-
-        # SolTrace metrics for the flux distribution #########
-        self.average_flux = stats['ave_flux']
-        self.sigma_flux = stats['sigma_flux']
-        self.uniformity = stats['uniformity']
-        ######################################################
-
-    def concentration_map(self, dni: float):
-        """
-        A method to calculate the concentration map in the Element.
-        Actually, it returns the flux concentration factor per bin.
-
-        :param dni: The direct normal irradiance, in W/m2.
-
-        :return: An array of arrays.
-        """
-
-        return self.flux_map / self.bin_area / dni
-
-########################################################################################################################
+#######################################################################################################################
 ########################################################################################################################
 
 

@@ -222,7 +222,7 @@ class RadialSource:
 
         return cum_eff
 
-    def to_soltrace(self, sun_dir: array):
+    def to_soltrace(self, sun_dir: array = array([0, 0, 1])):
         # OBS: SolTrace Sun box definitions considers units in milliradians (mrad).
         # return Sun(sun_dir=sun_dir, profile=self.profile, size=self.size * 1e3)
         return source2soltrace(source=self, sun_dir=sun_dir)
@@ -761,46 +761,10 @@ def source2soltrace(source: RadialSource, sun_dir: array) -> Sun:
         sunshape_profile = zeros(shape=(x_range.shape[0], 2))
 
         # SolTrace reads the angular displacement in milliradians
-        sunshape_profile.T[:] = x_range * 1e3, source.radial_distribution(x_range)
+        sunshape_profile.T[:] = x_range * 1e3, source.radial_distribution(x_range).round(4)
         sun = Sun(sun_dir=sun_dir, profile='u', user_data=sunshape_profile)
     else:
         # SolTrace reads the size of a pillbox or a Gaussian sunshape in milliradians
-        sun = Sun(sun_dir=sun_dir, profile=source.profile, size=source.size * 1e3)
+        sun = Sun(sun_dir=sun_dir.round(6), profile=source.profile, size=round(source.size * 1e3, 4))
 
     return sun
-
-
-########################################################################################################################
-########################################################################################################################
-
-
-# emsp_lat, emsp_long = 38.52895046933345, -8.005329724102586
-# emsp = SiteData(latitude=emsp_lat, longitude=emsp_long, name='emsp')
-
-##############################################################################################
-# Old functions for cumulative density functions for different effective sources #############
-# def cumulative_uniform_sunshape(sun_disk=4.65 * 1.e-3):
-#     delta = sun_disk * (3 ** 0.5) / 2
-#
-#     x = linspace(0, pi, 10000)
-#     y = zeros(len(x))
-#
-#     for i in range(len(x)):
-#         y[i] = abs(x[i]) / (2 * delta) if abs(x[i]) <= delta else 0.5
-#
-#     cumulative_function = interp1d(x, y, kind='cubic')
-#
-#     return cumulative_function
-#
-#
-# def cumulative_gaussian_sunshape(std_source):
-#     std = std_source
-#
-#     x = linspace(0, pi, 10000)
-#     cv = norm.cdf(x, scale=std) - 0.5
-#
-#     cumulative_function = interp1d(x, cv, kind='cubic')
-#
-#     return cumulative_function
-##############################################################################################
-##############################################################################################

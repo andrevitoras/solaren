@@ -1,7 +1,6 @@
 """
 Created by André Santos (andrevitoras@gmail.com / avas@uevora.pt)
 """
-from matplotlib import pyplot as plt
 from numpy import arccos, sin, pi, tan, array, linspace, deg2rad, cos, zeros
 
 from niopy.geometric_transforms import ang_h, ang_p, R, nrm, mid_point
@@ -42,16 +41,20 @@ class cpc_type:
         return self.as_plane_curve().to_soltrace(name=name, length=length, optic=optic)
 
 
-def symmetric_cpc2tube(theta_a: float, tube_radius: float, tube_center: array, degrees=True,
-                       nbr_pts=121, upwards=True):
+def symmetric_cpc2tube(tube_radius: float,
+                       tube_center: array,
+                       theta_a: float,
+                       degrees=True,
+                       nbr_pts=121,
+                       upwards=True):
 
     """
     This functions returns a tuple of arrays that corresponds to the elements of a Compound Parabolic Concentrator (cpc)
     to a tube.
 
-    :param theta_a: the acceptance half-angle of the cpc optic.
     :param tube_radius: the absorber tube absorber_radius, in mm.
     :param tube_center: the absorber tube center point, in mm.
+    :param theta_a: the acceptance half-angle of the cpc optic.
     :param nbr_pts: the number of points to discretize the contours of the cpc_type optic.
 
     :param degrees: a boolean sign to indicate whether the acceptance angle was inputted in degrees or radians.
@@ -92,7 +95,6 @@ def symmetric_cpc2tube(theta_a: float, tube_radius: float, tube_center: array, d
     phi_2 = ang_p(tl - X, left_inv_axis)
 
     # defining the contour points
-    # l_in = array([i1(x) for x in linspace(start=phi_1, stop=phi_2, num=nbr_pts)])
     l_in = parametric_points(f=i1, phi_1=phi_1, phi_2=phi_2, nbr_pts=nbr_pts)
     # the last point of the left involute is the starting point of the left macrofocal parabola
     s3 = l_in[-1]
@@ -146,7 +148,7 @@ def symmetric_cec2tube(tube_center: array, tube_radius: float, source_distance: 
                        nbr_pts=50, upwards=False):
 
     # This function first consider the center of the tube as the origin ######################
-    # Then, it translates the coordinate system by the function argument 'tube_center'.
+    # Then, it translates the coordinate system by the argument 'tube_center'.
     f = array([0, 0])
     ##########################################################################################
 
@@ -193,7 +195,8 @@ def symmetric_cec2tube(tube_center: array, tube_radius: float, source_distance: 
     me1 = wme(f=f, r=tube_radius, g=f1, p=s3)
 
     # macrofocal ellipse axis and angular (parametric) extension
-    left_me_axis = f1 - tube_center
+    # macrofocal ellipse axis goes from the macrofocus to the point focus
+    left_me_axis = f1 - f
     phi_1 = ang_p(t2 - f1, left_me_axis)
     phi_2 = ang_p(f2 - t1, left_me_axis)
 
@@ -222,7 +225,8 @@ def symmetric_cec2tube(tube_center: array, tube_radius: float, source_distance: 
     me2 = ume(f=f, r=tube_radius, g=f2, p=s4)
 
     # macrofocal ellipse axis and angular (parametric) extension
-    right_me_axis = f2 - tube_center
+    # macrofocal ellipse axis goes from the macrofocus to the point focus
+    right_me_axis = f2 - f
     phi_1 = ang_p(t1 - f2, right_me_axis)
     phi_2 = ang_p(f1 - t2, right_me_axis)
 
@@ -334,7 +338,7 @@ def symmetric_cpc2evacuated_tube(theta_a: float, tube_center: array, tube_radius
 
 def symmetric_cec2evacuated_tube(tube_center: array, tube_radius: float, cover_radius: float,
                                  source_distance: float, source_width: float,
-                                 nbr_pts=50, upwards=True, dy=0):
+                                 nbr_pts=50, upwards=True, dy=0.):
 
     """
     This functions presents the design of a Compound Elliptical Concentrator (CEC) optic to an evacuated tube, as
@@ -364,7 +368,6 @@ def symmetric_cec2evacuated_tube(tube_center: array, tube_radius: float, cover_r
     [1] Chaves, J., 2016. Introduction to Nonimaging Optics. CRC Press, New York, 2nd Edition.
     [2] Winston, R., 1978. Ideal flux concentrators with reflector gaps.
         Applied Optics 17, 1668–1669. https://doi.org/10.1364/AO.17.001668.
-
     """
 
     # This function first consider the center of the tube as the origin ######################
@@ -408,12 +411,15 @@ def symmetric_cec2evacuated_tube(tube_center: array, tube_radius: float, cover_r
     s3 = l_in[-1]
     #######################################
 
-    left_me_axis = f1 - t2
+    # macrofocal ellipse parametric equation
     me1 = wme(f=f, g=f1, r=tube_radius, p=s3)
+    # ellipse axis goes from the macrofocus to the point focus
+    left_me_axis = f1 - f
     phi_1 = ang_p(t2 - f1, left_me_axis)
     phi_2 = ang_p(f2 - t1, left_me_axis)
 
     l_me = parametric_points(f=me1, phi_1=phi_1, phi_2=phi_2, nbr_pts=nbr_pts)
+    ###############################################################################
 
     # Right involute
     right_inv_axis = array([1, 0])
@@ -424,11 +430,15 @@ def symmetric_cec2evacuated_tube(tube_center: array, tube_radius: float, cover_r
     r_in = parametric_points(f=i2, phi_1=phi_1, phi_2=phi_2, nbr_pts=nbr_pts)
     s4 = r_in[-1]
 
-    right_me_axis = f2 - t1
-    mp2 = ume(f=f, g=f2, r=tube_radius, p=s4)
+    # macrofocal ellipse parametric equation
+    me2 = ume(f=f, g=f2, r=tube_radius, p=s4)
+    # ellipse axis goes from the macrofocus to the point focus
+    right_me_axis = f2 - f
+    # opening angles defined by the edge-rays
     phi_1 = ang_p(t1 - f2, right_me_axis)
     phi_2 = ang_p(f1 - t2, right_me_axis)
-    r_me = parametric_points(f=mp2, phi_1=phi_1, phi_2=phi_2, nbr_pts=nbr_pts)
+    # contour surface points
+    r_me = parametric_points(f=me2, phi_1=phi_1, phi_2=phi_2, nbr_pts=nbr_pts)
 
     # Check if the cec optic aperture must be upwards or downwards and rotate the optics correspondingly.
     # It returns the tuple in the order from the left to the right.
@@ -469,7 +479,14 @@ def ideal_cpc_tube_data(theta_a: float, tube_radius: float):
     return a, h
 
 
-def oommen_cpc(tube_radius: float, outer_glass_radius: float, theta_a: float, number_pts=150) -> array:
+def oommen_cpc(tube_radius: float,
+               gap_radius: float,
+               theta_a: float,
+               theta_max: float = None,
+               number_pts=150) -> array:
+
+    # ToDo: include a detailed explanation regarding argument 'theta_max' in the documentation.
+
     """
     This function implements procedure proposed by Oomen and Jayaraman [1] to design a compound parabolic concentrator
     (CPC) to an absorber tube encapsulated by a cover -- as also detailed by Abbas et al. [2].
@@ -477,11 +494,14 @@ def oommen_cpc(tube_radius: float, outer_glass_radius: float, theta_a: float, nu
     The gap problem [3] is here solved by the virtual receiver design solution, as proposed by Winston [4]. Oommen and
     Jayaraman [1] denominate it as the extended receiver design.
 
+    Lastly, the argument 'theta_max' is included to (...). See Refs. [5,6] for application examples.
+
     This function returns an array of [x,y] points that define the cpc optic contour.
 
     :param tube_radius: the radius of the absorber tube, in millimeters.
-    :param outer_glass_radius: the radius of the cover tube, in millimeters.
+    :param gap_radius: the radius of the gap between optic and receiver, in millimeters.
     :param theta_a: the half-acceptance angle of the cpc optic, in degrees.
+    :param theta_max: the maximum angle to develop the cpc optic, in degrees.
     :param number_pts: number of contour points to return.
 
     :return: the contour points of the cpc optic.
@@ -490,11 +510,16 @@ def oommen_cpc(tube_radius: float, outer_glass_radius: float, theta_a: float, nu
     [2] Abbas et al., 2018. https://doi.org/10.1016/j.apenergy.2018.09.224.
     [3] Rabl, A., 1985. Active Solar Collectors and Their Applications. Oxford University Press, New York.
     [4] Winston, R., 1978. Ideal flux concentrators with reflector gaps. https://doi.org/10.1364/AO.17.001668.
+    [5] Cheng et al., 2018. A novel optical optimization model for linear Fresnel reflector concentrators.
+        https://doi.org/10.1016/j.renene.2018.06.019
+    [6] Men et al., 2021. Study on the annual optical comprehensive performance of linear Fresnel reflector
+        concentrators with an effective multi-objective optimization model.
+        https://doi.org/10.1016/j.solener.2021.07.051
     """
 
     # storing input data in auxiliary variables ###
     r1 = tube_radius
-    r2 = outer_glass_radius
+    r2 = gap_radius
     theta_a_rad = deg2rad(theta_a)
     ###############################################
 
@@ -507,9 +532,9 @@ def oommen_cpc(tube_radius: float, outer_glass_radius: float, theta_a: float, nu
     # beginning of the first segment of the optic
     theta_0 = arccos(r1/r2)
     # end of the first segment / start of the second
-    theta_1 = theta_a_rad + 0.5*pi
+    theta_1 = theta_a_rad + (pi/2)
     # end of the second segment
-    theta_2 = 1.5*pi - theta_a_rad
+    theta_2 = (3*pi/2) - theta_a_rad if theta_max is None else theta_max * (pi/180.)
     theta_range = linspace(start=theta_0, stop=theta_2, num=number_pts)
     #################################################################################
 
@@ -530,35 +555,3 @@ def oommen_cpc(tube_radius: float, outer_glass_radius: float, theta_a: float, nu
     ################################################################################################
 
     return curve_pts
-
-
-# t_radius = 35
-# g_radius = 57.5
-# half_acceptance = 56.0
-# cpc_points = oommen_cpc(tube_radius=t_radius, outer_glass_radius=g_radius, theta_a=half_acceptance, number_pts=150)
-
-#
-# tube_points = t_radius * array([[sin(t), cos(t)] for t in linspace(0, 2*pi, 50)])
-# cover_points = g_radius * array([[sin(t), cos(t)] for t in linspace(0, 2*pi, 50)])
-#
-# cpc2 = symmetric_cpc2evacuated_tube(theta_a=half_acceptance,
-#                                     tube_center=array([0, 0]),
-#                                     tube_radius=t_radius,
-#                                     cover_radius=g_radius,
-#                                     nbr_pts=35, degrees=True, upwards=True)
-#
-# cpc_points = oommen_cpc(tube_radius=t_radius, outer_glass_radius=g_radius, theta_a=half_acceptance, number_pts=20)
-#
-# fig = plt.figure(dpi=300)
-# plt.plot(*tube_points.T, color='black')
-# plt.plot(*cover_points.T, color='red')
-#
-# plt.plot(*cpc2[-1].T, color='blue', label="Chaves' design")
-# plt.plot(*cpc2[-2].T, color='blue')
-# plt.plot(*cpc_points.T, label="Oomen's design", lw=0, marker='.', ms=5, color='magenta')
-#
-# plt.xlim(-30, 220)
-# plt.ylim(-30, 220)
-#
-# plt.legend()
-# plt.show()

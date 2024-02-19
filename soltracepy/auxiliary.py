@@ -10,20 +10,20 @@ from soltracepy import *
 
 def reflective_surface(name: str, rho: float, slope_error: float, spec_error: float):
 
-    front = OpticInterface(name=name, reflectivity=rho, transmissivity=0,
-                           slp_error=slope_error, spec_error=spec_error, front=True)
+    front = OpticInterface(name=name, reflectivity=round(rho, 4), transmissivity=0,
+                           slp_error=round(slope_error, 4), spec_error=round(spec_error, 4), front=True)
     back = OpticInterface(name=name, reflectivity=0, transmissivity=0,
-                          slp_error=slope_error, spec_error=spec_error, front=False)
+                          slp_error=round(slope_error, 4), spec_error=round(spec_error, 4), front=False)
 
     return OpticalSurface(name=name, front_side=front, back_side=back)
 
 
 def secondary_surface(name: str, rho: float, slope_error: float, spec_error: float):
 
-    front = OpticInterface(name=name, reflectivity=rho, transmissivity=0,
-                           slp_error=slope_error, spec_error=spec_error, front=True)
+    front = OpticInterface(name=name, reflectivity=round(rho, 4), transmissivity=0,
+                           slp_error=round(slope_error, 4), spec_error=round(spec_error, 4), front=True)
     back = OpticInterface(name=name, reflectivity=rho, transmissivity=0,
-                          slp_error=slope_error, spec_error=spec_error, front=False)
+                          slp_error=round(slope_error, 4), spec_error=round(spec_error, 4), front=False)
 
     return OpticalSurface(name=name, front_side=front, back_side=back)
 
@@ -36,8 +36,8 @@ def flat_absorber_surface(name: str, alpha: float):
 
 
 def absorber_tube_surface(name: str, alpha: float):
-    front = OpticInterface(name=name, reflectivity=1 - alpha, transmissivity=0, front=True)
-    back = OpticInterface(name=name, reflectivity=1 - alpha, transmissivity=0, front=False)
+    front = OpticInterface(name=name, reflectivity=round(1 - alpha, 4), transmissivity=0, front=True)
+    back = OpticInterface(name=name, reflectivity=round(1 - alpha, 4), transmissivity=0, front=False)
 
     return OpticalSurface(name=name, front_side=front, back_side=back)
 
@@ -45,19 +45,22 @@ def absorber_tube_surface(name: str, alpha: float):
 def transmissive_surface(name: str, tau: float, nf: float, nb: float):
 
     front = OpticInterface(name=name, reflectivity=0, transmissivity=tau, real_refractive_index=nf, front=True,
-                           spec_error=0., slp_error=0.)
-    back = OpticInterface(name=name, reflectivity=0, transmissivity=1, real_refractive_index=nb, front=False,
-                          spec_error=0., slp_error=0.)
+                           spec_error=1e-4, slp_error=1e-4)
+    back = OpticInterface(name=name, reflectivity=0, transmissivity=tau, real_refractive_index=nb, front=False,
+                          spec_error=1e-4, slp_error=1e-4)
 
     return OpticalSurface(name=name, front_side=front, back_side=back)
 
 
 def cover_surfaces(tau: float, name='cover', refractive_index=1.52):
 
-    # tau_s = tau**0.5
+    tau_s = round(tau**0.5, 5)
 
-    out_surf = transmissive_surface(name=f'{name}_outer_cover', tau=tau, nf=refractive_index, nb=1.0)
-    inn_surf = transmissive_surface(name=f'{name}_inner_cover', tau=1, nf=1.0, nb=refractive_index)
+    out_surf = transmissive_surface(name=f'{name}_outer_cover', tau=tau_s, nf=refractive_index, nb=1.0)
+    inn_surf = transmissive_surface(name=f'{name}_inner_cover', tau=tau_s, nf=1.0, nb=refractive_index)
+
+    # out_surf = transmissive_surface(name=f'{name}_outer_cover', tau=tau_s, nf=1.0, nb=refractive_index)
+    # inn_surf = transmissive_surface(name=f'{name}_inner_cover', tau=tau_s, nf=refractive_index, nb=1.0)
 
     return out_surf, inn_surf
 

@@ -7,23 +7,31 @@ The respective sources which present the designs are cited in the functions.
 """
 from copy import deepcopy
 
-from matplotlib import pyplot as plt
-from numpy import array, arctan, sin, cos, pi, arcsin, linspace, arccos, tan
+from numpy import array, arctan, sin, cos, pi, arcsin, linspace
 from portion import closed, Interval, empty
-from scipy.optimize import fsolve
 
-from niopy.geometric_transforms import dst, nrm, R, tgs2tube, ang_pn, V, isl, ang_h
-from niopy.plane_curves import par, hyp
+from niopy.geometric_transforms import dst, nrm, R, tgs2tube, ang_pn, V, Sy, ang
+from niopy.plane_curves import par, PlaneCurve, concatenate_curves
+from scopy.nio_concentrators import oommen_cpc, symmetric_cpc2tube, symmetric_cpc2evacuated_tube, symmetric_cec2tube, \
+    symmetric_cec2evacuated_tube, cpc_type
+from utils import rotate2D
+
 
 ########################################################################################################################
-# Auxiliary functions ###### ###########################################################################################
+# Auxiliary functions ##################################################################################################
 
 
 def primary_field_edge_points(primaries: array):
-    f1 = primaries[0][-1] if primaries[0][-1][0] > primaries[0][-1][-1] else primaries[0][0]  # right side edge
-    f2 = primaries[-1][-1] if primaries[-1][-1][0] < primaries[-1][0][0] else primaries[-1][0]  # left side edge
 
-    return f1, f2
+    f1 = primaries[0][-1] if primaries[0][-1][0] > primaries[0][0][0] else primaries[0][0]
+    f2 = primaries[-1][-1] if primaries[-1][-1][0] < primaries[-1][0][0] else primaries[-1][0]
+
+    if f1[0] < f2[0]:
+        p_left_edge, p_right_edge = f1, f2
+    else:
+        p_left_edge, p_right_edge = f2, f1
+
+    return p_left_edge, p_right_edge
 
 
 def primary_field_edge_mirrors_centers(primaries: array):
@@ -200,9 +208,9 @@ def adaptative_advance(staring_point: array, primaries: array,
     It considers a starting point, calculates the principal direction, and then advance with the adaptative approach
     to determine the other points that define the secondary optic contour.
 
-    :param staring_point: the starting point of the secondary optic, a [x, y] point-array.
+    :param staring_point: the starting point of the secondary optic, a [x,y] point-array.
     :param primaries:
-    :param tube_center: the center point of the absorber tube, a [x, y] point-array.
+    :param tube_center: the center point of the absorber tube, a [x,y] point-array.
     :param tube_radius: the radius of the absorber tube
     :param ds: the length of the adaptative step, in millimeters
     :param central_incidence: a boolean sign to calculate by central incidence (True) or intensity analysis (False).
@@ -365,97 +373,179 @@ def parabolic_wings(field_width: float, tube_center: array, tube_radius: float, 
 ########################################################################################################################
 ########################################################################################################################
 
+
+def oommen_cpc4tube(tube_center: array,
+                    tube_radius: float,
+                    gap_radius: float,
+                    theta_a: float, theta_max: float,
+                    points_per_side: int):
+
+    right_side = oommen_cpc(tube_radius=tube_radius,
+                            gap_radius=gap_radius,
+                            theta_a=theta_a,
+                            theta_max=theta_max,
+                            number_pts=points_per_side)
+
+    left_side = array([Sy(pt) for pt in right_side])
+
+    pivot_point = array([0, 0]) - array([0, gap_radius])
+
+    lo = rotate2D(points=left_side, center=pivot_point, tau=pi) + array([0, 2 * gap_radius])
+    ro = rotate2D(points=right_side, center=pivot_point, tau=pi) + array([0, 2 * gap_radius])
+
+    optic_points = concatenate_curves(base_curve=ro[::-1] + tube_center, next_curve=lo + tube_center)
+    # optic_points = array((ro[::-1] + tube_center).tolist() + (lo + tube_center).tolist())
+
+    cusp_point = tube_center + array([0, gap_radius])
+
+    return PlaneCurve(curve_pts=optic_points, curve_center=cusp_point)
+
+
+def half_acceptance2tube(primary_field: array,
+                         tube_center: array,
+                         tube_radius: float) -> float:
+
+    # Determining the emitter and receiver edges ###############################
+    # Defining the primary field edge points
+    # since this is related to the symmetric case, the left edge of the primary field is selected.
+    p_left_edge, _ = primary_field_edge_points(primaries=primary_field)
+
+    # Defining the receiver edge to the primary edge
+    t1, t2 = tgs2tube(point=p_left_edge,
+                      tube_center=tube_center,
+                      tube_radius=tube_radius)
+    r_right_edge = t1 if t1[0] > t2[0] else t2
+    ############################################################################
+
+    # Calculating the half_acceptance of this symmetric optic, in degrees.
+    half_acceptance = ang(r_right_edge - p_left_edge, array([0, 1])) * (180. / pi)
+
+    return half_acceptance
+
+
+def cpc4tube(primary_field: array,
+             tube_center: array,
+             tube_radius: float,
+             gap_radius: float = None,
+             points_per_section: int = 50):
+
+    half_acceptance = half_acceptance2tube(primary_field=primary_field,
+                                           tube_center=tube_center,
+                                           tube_radius=tube_radius)
+
+    if abs(gap_radius) == 0 or gap_radius is None:
+        l_con, l_inv, r_inv, r_con = symmetric_cpc2tube(tube_radius=abs(tube_radius),
+                                                        tube_center=tube_center,
+                                                        theta_a=half_acceptance, degrees=True,
+                                                        nbr_pts=points_per_section, upwards=False)
+    elif abs(gap_radius) > abs(tube_radius):
+        l_con, l_inv, r_inv, r_con = symmetric_cpc2evacuated_tube(tube_radius=abs(tube_radius),
+                                                                  tube_center=tube_center,
+                                                                  cover_radius=gap_radius, dy=0,
+                                                                  theta_a=half_acceptance, degrees=True,
+                                                                  nbr_pts=points_per_section, upwards=False)
+    else:
+        raise ValueError('The gap and tube radii do not match: tube radius should be lower than gap radius!')
+
+    optic = cpc_type(left_conic=l_con, left_involute=l_inv, right_involute=r_inv, right_conic=r_con)
+
+    return optic
+
+
+def cec4tube(primary_field: array,
+             tube_center: array,
+             tube_radius: float,
+             gap_radius: float = None,
+             points_per_section: int = 50):
+
+    p_left_edge, p_right_edge = primary_field_edge_points(primaries=primary_field)
+    source_width = dst(p_left_edge, p_right_edge)
+    source_distance = (tube_center - p_left_edge)[-1]
+
+    # The symmetric CEC secondary with no gap between the optic and absorber tube.
+    if abs(gap_radius) == 0 or gap_radius is None:
+        l_con, l_inv, r_inv, r_con = symmetric_cec2tube(tube_radius=abs(tube_radius),
+                                                        tube_center=tube_center,
+                                                        source_width=source_width,
+                                                        source_distance=source_distance,
+                                                        nbr_pts=points_per_section, upwards=False)
+    # The symmetric CEC secondary with a gap between the optic and absorber tube.
+    elif abs(gap_radius) > abs(tube_radius):
+        l_con, l_inv, r_inv, r_con = symmetric_cec2evacuated_tube(tube_radius=abs(tube_radius),
+                                                                  tube_center=tube_center,
+                                                                  cover_radius=gap_radius, dy=0,
+                                                                  source_width=source_width,
+                                                                  source_distance=source_distance,
+                                                                  nbr_pts=points_per_section, upwards=False)
+    else:
+        raise ValueError('The gap and tube radii do not match: tube radius should be lower than gap radius!')
+
+    optic = cpc_type(left_conic=l_con, left_involute=l_inv, right_involute=r_inv, right_conic=r_con)
+
+    return optic
+
 ########################################################################################################################
 # CPC secondary for LFCs ###############################################################################################
 
 
-def virtual_receiver_perimeter(tube_radius: float, cover_outer_radius: float):
-    r = abs(tube_radius)
-    rg = abs(cover_outer_radius)
-
-    beta = arccos(r / rg)
-
-    return 2 * r * (pi - beta + tan(beta))
-
-
-def edges2tube(f1: array, f2: array, tube_center: array, tube_radius):
-    tg1, tg2 = tgs2tube(point=f1, tube_center=tube_center, tube_radius=tube_radius)
-    t1 = tg1 if tg1[0] < tube_center[0] else tg2
-
-    tg3, tg4 = tgs2tube(point=f2, tube_center=tube_center, tube_radius=tube_radius)
-    t2 = tg3 if tg3[0] > tube_center[0] else tg4
-
-    return t1, t2
-
-
-def hotel_strings(f1, f2, s1, s2):
-    a = dst(f1, s1) - dst(f1, s2)
-    b = dst(f2, s1) - dst(f2, s2)
-
-    return abs(a) + abs(b)
-
-
-def aperture_from_flow_line(f1, f2, e1, e2, flow_line, phi):
-    p = flow_line(phi)
-    s1 = isl(p=f1, v=p - f1, q=f2, u=e2)
-    s2 = isl(p=f2, v=p - f2, q=f1, u=e1)
-
-    return s1, s2
-
-
-def cpc_aperture(f1: array, f2: array, tube_center: array, tube_radius):
-    t1, t2 = edges2tube(f1=f1, f2=f2, tube_center=tube_center, tube_radius=tube_radius)
-    e1, e2 = t1 - f1, t2 - f2
-
-    A = isl(p=f1, v=e1, q=f2, u=e2)
-
-    if dst(f1, tube_center) > dst(f2, tube_center):
-        flow_line = hyp(f=f1, g=f2, p=A)
-        phi_0 = ang_h(A - f1) - pi
-    else:
-        flow_line = hyp(f=f2, g=f1, p=A)
-        phi_0 = ang_h(A - f2)
-
-    def delta_etendue(phi):
-
-        a1, a2 = aperture_from_flow_line(f1=f1, f2=f2, e1=e1, e2=e2, flow_line=flow_line, phi=phi)
-        u = hotel_strings(f1=f1, f2=f2, s1=a1, s2=a2)
-
-        return u - 4 * pi * tube_radius
-
-    phi_a = fsolve(delta_etendue, x0=phi_0)[0] - pi
-    s1, s2 = aperture_from_flow_line(f1=f1, f2=f2, e1=e1, e2=e2, flow_line=flow_line, phi=phi_a)
-
-    return s1, s2
+# def virtual_receiver_perimeter(tube_radius: float, cover_outer_radius: float):
+#     r = abs(tube_radius)
+#     rg = abs(cover_outer_radius)
+#
+#     beta = arccos(r / rg)
+#
+#     return 2 * r * (pi - beta + tan(beta))
+#
+#
+# def edges2tube(f1: array, f2: array, tube_center: array, tube_radius):
+#     tg1, tg2 = tgs2tube(point=f1, tube_center=tube_center, tube_radius=tube_radius)
+#     t1 = tg1 if tg1[0] < tube_center[0] else tg2
+#
+#     tg3, tg4 = tgs2tube(point=f2, tube_center=tube_center, tube_radius=tube_radius)
+#     t2 = tg3 if tg3[0] > tube_center[0] else tg4
+#
+#     return t1, t2
+#
+#
+# def hotel_strings(f1, f2, s1, s2):
+#     a = dst(f1, s1) - dst(f1, s2)
+#     b = dst(f2, s1) - dst(f2, s2)
+#
+#     return abs(a) + abs(b)
+#
+#
+# def aperture_from_flow_line(f1, f2, e1, e2, flow_line, phi):
+#     p = flow_line(phi)
+#     s1 = isl(p=f1, v=p - f1, q=f2, u=e2)
+#     s2 = isl(p=f2, v=p - f2, q=f1, u=e1)
+#
+#     return s1, s2
+#
+#
+# def cpc_aperture(f1: array, f2: array, tube_center: array, tube_radius):
+#     t1, t2 = edges2tube(f1=f1, f2=f2, tube_center=tube_center, tube_radius=tube_radius)
+#     e1, e2 = t1 - f1, t2 - f2
+#
+#     A = isl(p=f1, v=e1, q=f2, u=e2)
+#
+#     if dst(f1, tube_center) > dst(f2, tube_center):
+#         flow_line = hyp(f=f1, g=f2, p=A)
+#         phi_0 = ang_h(A - f1) - pi
+#     else:
+#         flow_line = hyp(f=f2, g=f1, p=A)
+#         phi_0 = ang_h(A - f2)
+#
+#     def delta_etendue(phi):
+#
+#         a1, a2 = aperture_from_flow_line(f1=f1, f2=f2, e1=e1, e2=e2, flow_line=flow_line, phi=phi)
+#         u = hotel_strings(f1=f1, f2=f2, s1=a1, s2=a2)
+#
+#         return u - 4 * pi * tube_radius
+#
+#     phi_a = fsolve(delta_etendue, x0=phi_0)[0] - pi
+#     s1, s2 = aperture_from_flow_line(f1=f1, f2=f2, e1=e1, e2=e2, flow_line=flow_line, phi=phi_a)
+#
+#     return s1, s2
 
 ########################################################################################################################
 ########################################################################################################################
-
-#
-# t_radius = 35
-# g_radius = 62.5
-# t_center = array([0, 8000])
-#
-# tube_points = t_radius * array([[sin(t), cos(t)] for t in linspace(0, 2*pi, 50)]) + t_center
-# cover_points = g_radius * array([[sin(t), cos(t)] for t in linspace(0, 2*pi, 50)]) + t_center
-# in_cover_points = (g_radius - 3) * array([[sin(t), cos(t)] for t in linspace(0, 2*pi, 50)]) + t_center
-#
-#
-# pwc_optic = parabolic_wings(field_width=16560,
-#                             tube_center=t_center,
-#                             tube_radius=t_radius,
-#                             gap_size=g_radius - t_radius)
-#
-# fig = plt.figure(dpi=300)
-# plt.plot(*tube_points.T, color='black')
-# plt.plot(*cover_points.T, color='red', ls='dashed')
-# plt.plot(*in_cover_points.T, color='red', ls='dashed')
-#
-#
-# plt.plot(*pwc_optic.T, color='blue', label="Parabolic Wings Concentrator")
-#
-# plt.xlim(t_center[0] - 120, t_center[0] + 120)
-# plt.ylim(t_center[1] - 120, t_center[1] + 120)
-#
-# plt.legend()
-# plt.show()

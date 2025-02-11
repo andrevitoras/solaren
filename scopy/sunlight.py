@@ -34,6 +34,8 @@ is 180º (pi) for the Northern hemisphere and 0 for the southern hemisphere.
 from pathlib import Path
 from typing import Tuple, Callable
 
+import matplotlib.pyplot as plt
+import seaborn
 from numpy import sin, cos, tan, arctan, array, dot, pi, log, exp, linspace, zeros, sqrt, identity, deg2rad, rad2deg, \
     ndarray, power, piecewise, absolute
 from pandas import DataFrame
@@ -46,6 +48,7 @@ from scipy.signal import fftconvolve
 from scipy.stats import norm, uniform
 
 from niopy.geometric_transforms import R
+from pysoltrace import PySolTrace
 from soltracepy import Sun
 from utils import dic2json
 
@@ -132,48 +135,54 @@ class RadialSource:
 
         if size is None or profile is None:
             self.profile = None
+            self.shape = None
             self.size = 0.
             self.rms_width = 0.
-
             self.radial_distribution = None
-
             self.radial_pdf = None
             self.linear_pdf = None
-
             self.linear_distribution = None
 
         elif profile == 'pillbox' or profile == 'p':
             self.profile = 'pillbox'
+            self.shape = 'p'
             self.size = abs(size)
             self.rms_width = self.size / sqrt(2)
 
             self.radial_distribution = pillbox_sunshape(half_width=self.size, pdf=False)
-
             self.radial_pdf = radial_pdf(pillbox_sunshape(half_width=self.size, pdf=True))
             self.linear_pdf = pillbox_sunshape(half_width=self.size * sqrt(3.) / 2., pdf=True)
-
             self.linear_cdf = cumulative_pillbox_source(half_width=self.size, linear=True)
 
         elif profile == 'gaussian' or profile == 'g':
             self.profile = 'gaussian'
+            self.shape = 'g'
             self.size = abs(size)
             self.rms_width = self.size * sqrt(2)
 
             self.radial_distribution = gaussian_sunshape(std=self.size, pdf=False)
-
             self.radial_pdf = radial_pdf(gaussian_sunshape(std=self.size, pdf=True))
             self.linear_pdf = gaussian_sunshape(std=self.size, pdf=True)
-
             self.linear_cdf = cumulative_gaussian_source(std_source=self.size, linear=True)
 
         elif profile == 'buie' or profile == 'b':
+
             self.profile = 'buie'
+            self.shape = 'b'
             self.size = abs(size)
 
             sunshape = BuieSunshape(csr=self.size, csr_calibration=True)
-
             self.rms_width = sunshape.rms_width
             self.radial_distribution = sunshape.radial_distribution
+
+            # to be represented in the SolTrace api
+            x_range = linspace(start=0, stop=45.e-3, num=50)
+            sunshape_profile = zeros(shape=(x_range.shape[0], 2))
+            # SolTrace reads the angular displacement in milliradians
+            sunshape_profile.T[:] = x_range * 1e3, self.radial_distribution(x_range).round(5)
+            self.values = sunshape_profile
+
+            self.linear_pdf = gaussian_sunshape(std=self.rms_width / sqrt(2), pdf=True)
 
         elif profile == 'user' or profile == 'u':
             self.profile = "'u'"
@@ -203,29 +212,64 @@ class RadialSource:
         :return: the cumulative effective source of the convoluted source, an array
         """
 
-        if slope_error == 0 and specular_error == 0.:
+        overall_error = sqrt(4*slope_error**2 + specular_error**2).round(10)
+
+        if self.profile is None:
+            if overall_error == 0.:
+                cum_eff = RadialSource(profile='g', size=1e-20).linear_cum_eff()
+            else:
+                cum_eff = RadialSource(profile='g', size=overall_error).linear_cum_eff()
+        elif self.profile == 'pillbox' and overall_error == 0.:
             cum_eff = self.linear_cum_eff()
         else:
-            optical_errors = sqrt(4*slope_error**2 + specular_error**2)
-            errors_source = RadialSource(profile='g', size=optical_errors)
+            errors_rms_size = sqrt(2) * overall_error
+            source_rms_size = sqrt(self.rms_width**2 + errors_rms_size**2)
+            cum_eff = RadialSource(profile='g', size=source_rms_size/sqrt(2)).linear_cum_eff()
 
-            conv_pdf = pdfs_convolution(f=self.linear_pdf,
-                                        g=errors_source.linear_pdf,
-                                        out_callable=True)
-
-            conv_cdf = pdf2cdf(conv_pdf)
-
-            x_range = linspace(start=0, stop=pi, num=100000)
-            cum_eff = zeros(shape=(x_range.shape[0], 2))
-
-            cum_eff.T[:] = x_range, conv_cdf(x_range)
+            # # Old implementation ##################################################
+            # # Outdated in 01-sep-24
+            # errors_source = RadialSource(profile='g', size=overall_error)
+            #
+            # conv_pdf = pdfs_convolution(f=self.linear_pdf,
+            #                             g=errors_source.linear_pdf,
+            #                             out_callable=True)
+            #
+            # conv_cdf = pdf2cdf(conv_pdf)
+            #
+            # x_range = linspace(start=0, stop=pi, num=100000)
+            # cum_eff = zeros(shape=(x_range.shape[0], 2))
+            # cum_eff.T[:] = x_range, conv_cdf(x_range)
+            # ########################################################################
 
         return cum_eff
 
     def to_soltrace(self, sun_dir: array = array([0, 0, 1])):
-        # OBS: SolTrace Sun box definitions considers units in milliradians (mrad).
-        # return Sun(sun_dir=sun_dir, profile=self.profile, size=self.size * 1e3)
-        return source2soltrace(source=self, sun_dir=sun_dir)
+        if self.shape in ('b', 'u'):
+            sun = Sun(sun_dir=sun_dir, profile='u', user_data=self.values)
+        else:
+            sun = Sun(sun_dir=sun_dir.round(10), profile=self.profile, size=round(self.size * 1e3, 10))
+
+        return sun
+
+    def to_pysoltrace(self, sun_dir: array = array([0, 0, 1])):
+
+        # initializing the corresponding object
+        sun = PySolTrace.Sun()
+        # sun vector
+        sun.position.x, sun.position.y, sun.position.z = 100 * sun_dir
+        # Sunshape and its size
+        if self.shape in ('b', 'u'):
+            sun.shape = 'u'
+            sun.user_intensity_table = self.values.tolist()
+        else:
+            if self.profile is None:
+                sun.shape = 'p'
+                sun.sigma = 0.001
+            else:
+                sun.shape = self.shape
+                sun.sigma = self.size * 1e3  # to convert to mrad
+
+        return sun
 
     def export2dic(self):
 
@@ -257,8 +301,8 @@ class BuieSunshape:
     def __init__(self, csr: float, aureole_extension: float = 43.6e-3, csr_calibration=True):
 
         # Angles defined by Buie et al. [1] when defining the sunshape profile.
-        self.disk_radius = 4.65e-3  # extension of the solar disk, in rad.
-        self.aureole_radius = abs(aureole_extension)  # extension of the solar aureole, in rad.
+        self.disk_radius = 4.65e-3  # extension of the solar disk, in radians.
+        self.aureole_radius = abs(aureole_extension)  # extension of the solar aureole, in radians.
 
         # inputted circumsolar ratio.
         self.csr = abs(csr)
@@ -374,7 +418,8 @@ class BuieSunshape:
 
 
 def get_tmy_data(latitude: float, longitude: float,
-                 start_year: int = 2006, end_year: int = 2016) -> Tuple[DataFrame, list, dict, list]:
+                 start_year: int = 2006, end_year: int = 2016,
+                 source='json') -> Tuple[DataFrame, list, dict, list]:
     """
     This function gets a Typical Meteorological Year (TMY) from the PVGIS API.
 
@@ -382,24 +427,40 @@ def get_tmy_data(latitude: float, longitude: float,
     :param longitude: local longitude, in degrees.
     :param start_year: starting year to construct the TMY
     :param end_year: ending year to construct the TMY
+    :param source: type of source file to get from the pvgis API
 
     :return: It returns a pandas DataFrame object with the TMY data.
 
     The returned DataFrame has the following columns: 'temp_air', 'relative_humidity', 'ghi', 'dni', 'dhi', 'IR(h)',
     'wind_speed', 'wind_direction', 'pressure', 'sun_zenith', 'sun_azimuth'.
 
-    The 'temp_air' column has units in ºC. The columns 'ghi', 'dni', and 'dhi' have units in W/m2.
+    The 'temp_air' column has units in ºC.
+    The columns 'ghi', 'dni', and 'dhi' have units in W/m2.
     """
 
-    pvgis_database, months_dic, location_data, legend = get_pvgis_tmy(latitude=latitude, longitude=longitude,
-                                                                      outputformat='csv',
-                                                                      map_variables=True,
-                                                                      startyear=start_year, endyear=end_year)
+    if source == 'csv':
+        pvgis_database, months_dic, location_data, legend = get_pvgis_tmy(latitude=latitude, longitude=longitude,
+                                                                          outputformat='csv',
+                                                                          map_variables=True,
+                                                                          startyear=start_year, endyear=end_year)
+        location = Location(latitude=location_data['latitude'],
+                            longitude=location_data['longitude'],
+                            altitude=location_data['elevation'],
+                            tz='UTC')
 
-    location = Location(latitude=location_data['latitude'],
-                        longitude=location_data['longitude'],
-                        altitude=location_data['elevation'],
-                        tz='UTC')
+    elif source == 'json':
+        pvgis_database, months_dic, location_data, legend = get_pvgis_tmy(latitude=latitude, longitude=longitude,
+                                                                          outputformat='json',
+                                                                          map_variables=True,
+                                                                          startyear=start_year, endyear=end_year)
+
+        location = Location(latitude=location_data['location']['latitude'],
+                            longitude=location_data['location']['longitude'],
+                            altitude=location_data['location']['elevation'],
+                            tz='UTC')
+
+    else:
+        raise ValueError('Please, select a available source type for the pvgis_tmy!')
 
     solar_position = location.get_solarposition(times=pvgis_database.index)
 
@@ -768,3 +829,50 @@ def source2soltrace(source: RadialSource, sun_dir: array) -> Sun:
         sun = Sun(sun_dir=sun_dir.round(6), profile=source.profile, size=round(source.size * 1e3, 4))
 
     return sun
+
+
+if __name__ == '__main__':
+
+    emsp_lat, emsp_long = 38.53, -8.0
+    evora = SiteData(name='Evora', latitude=emsp_lat, longitude=emsp_long)
+
+    seaborn.set(style='whitegrid')
+    seaborn.set_context('notebook')
+
+    plt.rc('text', usetex=True)
+    plt.rcParams['text.latex.preamble'] = '\\usepackage{amsmath}\n \\usepackage{amssymb}'
+    plt.rcParams['font.family'] = 'serif'
+    plt.rcParams['font.serif'] = 'NewComputerModern10'
+
+    pillbox_profile = RadialSource(name='Pillbox', profile='p', size=4.65e-3)
+    gaussian_profile = RadialSource(name='Gaussian', profile='g', size=2.8e-3)
+    buie_profile = RadialSource(name='Buie', profile='b', size=0.25)
+
+    xs = linspace(start=0, stop=45.e-3, num=250)
+
+    fig = plt.figure(dpi=300, figsize=(5, 4))
+    ax = fig.add_subplot()
+
+    ax.set_xlabel(r'$\xi$ [rad]', fontsize=12)
+    ax.set_ylabel(r'$\phi(\xi)$', fontsize=12)
+
+    ax.plot(xs, pillbox_profile.radial_distribution(xs),  label='Pillbox', lw=1.5)
+    ax.plot(xs, gaussian_profile.radial_distribution(xs),  label='Gaussian', lw=1.5)
+    ax.plot(xs, buie_profile.radial_distribution(xs), label='Buie', lw=1.5)
+    ax.axvline(x=4.65e-3, ymin=0, ymax=1, color='red', ls='dashed', lw=1.)
+
+    ax.annotate(
+        r'$\theta_{\delta} = 4.65$ mrad',  # No text annotation
+        xy=(4.65e-3, 0.5),  # End point of the arrow
+        xytext=(0.01, 0.7),  # Start point of the arrow
+        arrowprops=dict(facecolor='black', shrink=0.02, width=2, headwidth=5),
+        fontsize=12,
+    )
+
+    ax.legend(fontsize=12)
+    plt.tight_layout()
+    plt.savefig('sunshape_profiles.svg')
+    plt.show()
+
+
+

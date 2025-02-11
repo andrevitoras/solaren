@@ -4,7 +4,8 @@ from pathlib import Path
 from numpy import array, arange, zeros
 from tqdm import tqdm
 
-from scopy.linear_fresnel import LFR, OpticalProperty
+from scopy import OpticalProperty
+from scopy.linear_fresnel import LFR
 from scopy.sunlight import RadialSource, sun_direction
 from soltracepy import Trace, Optics, Stage, Geometry, ElementStats, soltrace_script, run_soltrace, read_element_stats
 

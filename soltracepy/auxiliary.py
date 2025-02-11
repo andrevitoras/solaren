@@ -42,21 +42,24 @@ def absorber_tube_surface(name: str, alpha: float):
     return OpticalSurface(name=name, front_side=front, back_side=back)
 
 
-def transmissive_surface(name: str, tau: float, nf: float, nb: float):
+def transmissive_surface(name: str, tau: float, nf: float, nb: float, slope_error=0.0, specular_error=0.0):
 
     front = OpticInterface(name=name, reflectivity=0, transmissivity=tau, real_refractive_index=nf, front=True,
-                           spec_error=1e-4, slp_error=1e-4)
+                           spec_error=slope_error, slp_error=specular_error)
     back = OpticInterface(name=name, reflectivity=0, transmissivity=tau, real_refractive_index=nb, front=False,
-                          spec_error=1e-4, slp_error=1e-4)
+                          spec_error=slope_error, slp_error=specular_error)
 
     return OpticalSurface(name=name, front_side=front, back_side=back)
 
 
-def cover_surfaces(tau: float, name='cover', refractive_index=1.52):
+def cover_surfaces(tau: float, name='cover', refractive_index=1.52, slope_error=0.0, specular_error=0.0):
 
     tau_s = round(tau**0.5, 5)
 
-    out_surf = transmissive_surface(name=f'{name}_outer_cover', tau=tau_s, nf=refractive_index, nb=1.0)
+    out_surf = transmissive_surface(name=f'{name}_outer_cover',
+                                    tau=tau_s, nf=refractive_index, nb=1.0,
+                                    specular_error=specular_error, slope_error=slope_error)
+
     inn_surf = transmissive_surface(name=f'{name}_inner_cover', tau=tau_s, nf=1.0, nb=refractive_index)
 
     # out_surf = transmissive_surface(name=f'{name}_outer_cover', tau=tau_s, nf=1.0, nb=refractive_index)
@@ -214,6 +217,37 @@ def create_primary_mirror(width: float,
 
     return elem
 
+
+def create_parabolic_trough(width: float,
+                            vertex: array,
+                            focal_length: float,
+                            length: float,
+                            optic: OpticalSurface,
+                            name: str,
+                            optical_axis_direction=array([0, 0, 1])):
+
+    # The ecs_origin and ecs_aim_pt of the Element Coordinate System #####################
+    # Remember that SolTrace uses the units in meters
+    ecs_origin = array([vertex[0], 0, vertex[-1]])
+    ecs_aim = ecs_origin + focal_length * optical_axis_direction
+    # A vector from the ecs_origin to the ecs_aim_pt defines the z-axis of the ECS
+    ######################################################################################
+
+    aperture = list([0] * 9)
+    surface = list([0] * 9)
+
+    aperture[0:3] = 'r', width, length
+
+    # Defining the surface
+
+    # The 'c' factor is the parabola's gradient, as defined in SolTrace.
+    c = 1 / (2 * focal_length)
+    surface[0:2] = 'p', c
+
+    elem = Element(name=name, ecs_origin=ecs_origin, ecs_aim_pt=ecs_aim, z_rot=0,
+                   aperture=aperture, surface=surface, optic=optic, reflect=True)
+
+    return elem
 
 ########################################################################################################################
 ########################################################################################################################

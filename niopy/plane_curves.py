@@ -6,6 +6,9 @@ from numpy import dot, cos, sin, array, arcsin, sqrt, pi, zeros, arctan, linspac
 from scipy.interpolate import UnivariateSpline, splprep, splev
 from niopy.geometric_transforms import dst, ang_h, ang_p, V, nrm, R, mid_point
 from pathlib import Path
+
+from pysoltrace import PySolTrace
+from pysoltrace.geometries import flat_element
 from soltracepy import Element, OpticalSurface
 from soltracepy.auxiliary import create_csi_file
 
@@ -48,8 +51,8 @@ class PlaneCurve:
 
         # # An attribute for the center of the curve #######################################################
         # Old version ##################################
-        # It was only applied to a Heliostat object
-        # (see scopy.linear_fresnel.Heliostat)
+        # It was only applied to a PrimaryMirror object
+        # (see scopy.linear_fresnel.PrimaryMirror)
         # if curve_center is None:
         #     n_m = int((len(pts) + 1) / 2)
         #     hc = pts[n_m]
@@ -96,7 +99,7 @@ class PlaneCurve:
 
         return spl
 
-    def slope2surface(self):
+    def slope2surface(self, rep=True):
         """
         A method which returns the slope to the curve surface.
         The slope is the angle that the tangent vector makes with the positive direction of the x-axis.
@@ -106,10 +109,13 @@ class PlaneCurve:
 
         :return: An array of angles, in radians.
         """
-
-        tck, u = self.as_spline(rep=True)
-        dx_du, dy_du = splev(u, tck, der=1)
-        slope = arctan(dy_du / dx_du)
+        if rep:
+            tck, u = self.as_spline(rep=True)
+            dx_du, dy_du = splev(u, tck, der=1)
+            slope = arctan(dy_du / dx_du)
+        else:
+            dy_dx = self.as_spline(rep=False).derivative(n=1)
+            slope = arctan(dy_dx(self.x))
 
         return slope
 
@@ -169,7 +175,7 @@ class PlaneCurve:
 
             # Calculates the ecs_origin and the aim-point of the flat element #####
             origin = mid_point(p=pt_a, q=pt_b)
-            aim_pt = origin + R(-pi / 2).dot(pt_b - pt_a) * dst(p=pt_a, q=pt_b)
+            aim_pt = origin + 100 * R(-pi / 2).dot(pt_b - pt_a) * dst(p=pt_a, q=pt_b)
             ###################################################################
 
             # Converts to meters and to a [x, 0, z] arrays #########
@@ -249,6 +255,39 @@ class PlaneCurve:
 
         return full_file_path
 
+    def to_pysoltrace(self, length: float,
+                      parent_stage: PySolTrace.Stage, id_number: int,
+                      optic: PySolTrace.Optics) -> list:
+
+        elements = []
+        for i in range(len(self.curve_pts) - 1):
+            # Selecting the two consecutive points in the PlaneCurve #######
+            # that will define the flat segment
+            pt_a = self.curve_pts[i]
+            pt_b = self.curve_pts[i + 1]
+            ################################################################
+
+            # Calculates the ecs_origin and the aim-point of the flat element #####
+            origin = mid_point(p=pt_a, q=pt_b)
+            aim_pt = origin + 100 * R(-pi / 2).dot(pt_b - pt_a) * dst(p=pt_a, q=pt_b)
+            ###################################################################
+
+            # Converts to meters and to a [x, 0, z] arrays #########
+            origin = array([origin[0], 0, origin[-1]]) / 1000
+            aim_pt = array([aim_pt[0], 0, aim_pt[-1]]) / 1000
+            ########################################################
+
+            # Calculates the width of the flat Element ####
+            width = dst(p=pt_a, q=pt_b) / 1000
+            ###############################################
+
+            elements += [flat_element(width=width, length=length/1000,
+                                      ecs_origin=origin, ecs_aim=aim_pt,
+                                      parent_stage=parent_stage, id_number=id_number+i,
+                                      optic=optic)]
+
+        return elements
+
     def export2rhino(self, script):
         """
         This method writes the lines of code for the Rhino CAD software understand the PlaneCurve object as a curve.
@@ -265,7 +304,7 @@ class PlaneCurve:
 ########################################################################################################################
 # Auxiliary functions ##################################################################################################
 
-def concatenate_curves(base_curve: array, next_curve: array, precision=0.0001):
+def concatenate_curves(base_curve: array, next_curve: array, precision=0.00001):
 
     k = 0
     while dst(next_curve[k][0], base_curve[-1][0]) <= precision:

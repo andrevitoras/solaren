@@ -18,7 +18,9 @@ import subprocess
 from pathlib import Path
 from typing import TextIO
 
-from numpy import array, pi, zeros
+from numpy import array, pi
+
+from pysoltrace import PySolTrace, Point
 
 soltrace_paths = {'strace': Path('C:\\SolTrace\\3.1.0\\x64\\strace.exe'),
                   'soltrace2': Path('C:\\SolTrace\\2012.7.9\\SolTrace.exe'),
@@ -117,6 +119,21 @@ class Sun:
 
         return None
 
+    # def to_api(self):
+    #
+    #     # initializing the corresponding object
+    #     sun = PySolTrace.Sun()
+    #     # sun vector
+    #     sun.position.x, sun.position.y, sun.position.z = self.vector
+    #     # Sunshape and its size
+    #     sun.shape = self.shape[1:-1]
+    #     if sun.shape == 'u':
+    #         sun.user_intensity_table = self.values.tolist()
+    #     else:
+    #         sun.sigma = self.sigma
+    #
+    #     return sun
+
 
 class OpticInterface:
     """
@@ -183,6 +200,19 @@ class OpticInterface:
 
         return None
 
+    def to_api(self):
+
+        # initializing the corresponding object
+        face = PySolTrace.Optics.Face()
+
+        # setting properties of the object
+        face.reflectivity = self.ref
+        face.transmissivity = self.tran
+        face.slope_error = self.err_slop
+        face.spec_error = self.err_spec
+
+        return face
+
 
 class OpticalSurface:
     """
@@ -226,6 +256,15 @@ class OpticalSurface:
 
         return None
 
+    def to_api(self, index_id: int):
+        optic = PySolTrace.Optics(id=index_id)
+        optic.name = self.name
+
+        optic.front = self.front.to_api()
+        optic.back = self.back.to_api()
+
+        return optic
+
 
 class Optics:
     """
@@ -259,6 +298,12 @@ class Optics:
             prop.as_stinput(file=file)
 
         return None
+
+    def to_api(self):
+
+        api_properties = [opt_property.to_api(index_id=i) for i, opt_property in enumerate(self.properties)]
+
+        return api_properties
 
 
 class Element:
@@ -347,6 +392,30 @@ class Element:
         file.write(f"\t{self.INT}")
         file.write(f"\t{self.name}\n")
 
+    def to_api(self, parent_stage: PySolTrace.Stage, element_id: int, optic_prop: PySolTrace.Optics):
+
+        api_element = PySolTrace.Stage.Element(parent_stage=parent_stage, element_id=element_id)
+
+        api_element.enabled = self.EN
+        api_element.interaction = self.INT
+
+        api_element.position = Point(x=self.x, y=self.y, z=self.z)
+        api_element.aim = Point(x=self.ax, y=self.ay, z=self.az)
+        api_element.zrot = self.z_rot
+
+        api_element.aperture = self.aperture[0]
+        api_element.aperture_params = self.aperture[1:]
+
+        api_element.surface = self.surface[0]
+        if len(self.surface) == 2:
+            api_element.surface_file = self.surface[1]
+        else:
+            api_element.surface_params = self.surface[1:]
+
+        api_element.optic = optic_prop
+
+        return api_element
+
 
 class Stage:
     """
@@ -396,11 +465,11 @@ class Stage:
         self.elements = elements
 
         self.st_parameters = list(scs_origin) + ['AIM'] + list(scs_aim_pt) + ['ZROT', z_rot]
-        VT = 1 if virtual else 0
-        MH = 1 if rays_multi_hit else 0
-        TT = 1 if trace_through else 0
+        self.VT = 1 if virtual else 0
+        self.MH = 1 if rays_multi_hit else 0
+        self.TT = 1 if trace_through else 0
 
-        self.st_parameters += ['VIRTUAL', VT] + ['MULTIHIT', MH] + ['ELEMENTS', len(elements)] + ['TRACETHROUGH', TT]
+        self.st_parameters += ['VIRTUAL', self.VT] + ['MULTIHIT', self.MH] + ['ELEMENTS', len(elements)] + ['TRACETHROUGH', self.TT]
 
     def as_script(self, script: TextIO):
 
@@ -436,6 +505,24 @@ class Stage:
             el.as_stinput(file=file)
 
         return None
+
+    def to_api(self, stage_id: int, elements: list):
+
+        api_stage = PySolTrace.Stage(id=stage_id)
+
+        api_stage.name = self.name
+
+        api_stage.position = Point(x=self.x, y=self.y, z=self.z)
+        api_stage.aim = Point(x=self.x_aim, y=self.y_aim, z=self.z_aim)
+        api_stage.zrot = self.z_rot
+
+        api_stage.is_virtual = True if self.VT == 1 else False
+        api_stage.is_multihit = True if self.MH == 1 else False
+        api_stage.is_tracethrough = True if self.TT == 1 else False
+
+        api_stage.elements = elements
+
+        return api_stage
 
 
 class Geometry:
@@ -515,7 +602,7 @@ class ElementStats:
     def __init__(self,
                  stats_name: str,
                  stage_index: int, element_index: int,
-                 dni=1000, x_bins=15, y_bins=15,
+                 dni=1000., x_bins=15, y_bins=15,
                  final_rays=True):
         """
         This class holds the data to select an Element from a Stage and to export its rays (flux) stats data after a
@@ -545,6 +632,7 @@ class ElementStats:
         self.file_full_path = None
 
     def as_script(self, script, file_path: Path, soltrace_version=2012):
+        # ToDo: include the simulation time in the LK Table exported as a json file.
         """
         This method writes the script lines to collect the information of an Element in a particular Stage and then
         export this to a json file.
@@ -568,6 +656,7 @@ class ElementStats:
         # Set the source irradiance to compute flux calculations. A standard value of 1000 W/m2 was chosen.
         script.write(f"absorber_data = elementstats({self.stg_index}, {self.ele_index}, ")
         script.write(f"{self.x_bins}, {self.y_bins}, {self.dni}, {self.final_rays});\n\n")
+        script.write("absorber_data{'generated_rays'} = sundata(){'nrays'};\n")
 
         # Setting the SolTrace current working directory as the file_path.
         script.write("cwd('" + str([str(file_path)])[2:-2] + "');\n")
@@ -601,8 +690,9 @@ class ElementStats:
             # New implementation 21-Apr-2023 ###########################################################################
             # Selecting some keys from the LK tabel 'absorber_data' previously defined. These are float data keys.
             # These keys will be exported to the json file.
-            script.write('float_keys = ["min_flux", "bin_size_x", "power_per_ray", "bin_size_y", "peak_flux",\n')
-            script.write('"ave_flux", "sigma_flux", "uniformity", "radius", "num_rays"];\n')
+            script.write('float_keys = ["generated_rays", "min_flux", "bin_size_x", '
+                         '"power_per_ray", "bin_size_y", "peak_flux",\n')
+            script.write('"ave_flux", "sigma_flux", "radius", "num_rays"];\n')
             ############################################################################################################
 
             # Writing the LK code to write in the json file the keys and values of the LK-Table ########################
@@ -678,11 +768,17 @@ class ElementFlux:
         #########################################################
 
         # Other attributes ########################################
+        # number of generated rays
+        self.generated_rays = self.stats['generated_rays'] if 'generated_rays' in self.stats.keys() else None
+
         # surface radius
         self.radius = self.stats['radius']
 
         # the power, in kW, carried by each ray
         self.ray_power = self.stats['power_per_ray'] / 1000.
+
+        # simulations running time, if exist
+        self.runtime = self.stats['sim_time'] if 'sim_time' in self.stats.keys() else None
         ###########################################################
 
         # Bin attributes ######################################################
@@ -694,7 +790,7 @@ class ElementFlux:
         # position of the bins center
         self.xbin_values = array(self.stats['xvalues'])
         self.ybin_values = array(self.stats['yvalues'])
-        self.rbin_values = (180/pi) * (self.xbin_values / self.radius)
+        self.rbin_values = (180/pi) * (self.xbin_values / self.radius) if self.radius > 0 else None
         #######################################################################
 
         # Flux attributes #######################################################
@@ -713,21 +809,24 @@ class ElementFlux:
         # the flux standard deviation, in kW/m2
         self.flux_std = self.flux_map.std()
 
+        # uniformity index
+        self.uniformity = self.flux_std / self.flux_mean if self.flux_mean > 0. else 0.
+
         # flux in the x-axis of the Element Coordinate System
         self.flux_x_distribution = self.flux_map.mean(axis=0)
         self.flux_x_std = self.flux_x_distribution.std()
-        self.flux_x_uniformity = self.flux_x_std / self.flux_mean
+        self.flux_x_uniformity = self.flux_x_std / self.flux_mean if self.flux_mean > 0 else None
 
         # Flux in the y-axis of the Element Coordinate System
         self.flux_y_distribution = self.flux_map.mean(axis=1)
         self.flux_y_std = self.flux_y_distribution.std()
-        self.flux_y_uniformity = self.flux_y_std / self.flux_mean
+        self.flux_y_uniformity = self.flux_y_std / self.flux_mean if self.flux_mean > 0 else None
         ###########################################################################
 
         # SolTrace metrics for the flux distribution ###########
-        self.average_flux = self.stats['ave_flux']
-        self.sigma_flux = self.stats['sigma_flux']
-        self.uniformity = self.stats['uniformity']
+        # self.average_flux = self.stats['ave_flux']
+        # self.sigma_flux = self.stats['sigma_flux']
+        # self.uniformity = self.stats['uniformity']
         #########################################################
 
         ##########################################################################
@@ -893,7 +992,7 @@ def run_soltrace(lk_file_full_path: Path, soltrace_path=Path(f"C:\\SolTrace\\201
     :return None
     """
 
-    cmd = f"{soltrace_path}" + ' -s ' + f"{lk_file_full_path} -h"
+    cmd = f"{soltrace_path}" + ' -s ' + f"{lk_file_full_path}"
     subprocess.run(cmd, shell=True, check=True, capture_output=True)
 
     return None
@@ -916,6 +1015,39 @@ def read_element_stats(full_file_path: Path):
 
 #######################################################################################################################
 ########################################################################################################################
+
+
+def run_api(sun: PySolTrace.Sun,
+            optics: list,
+            stages: list,
+            trace_options: Trace):
+
+    ok_optics = [isinstance(o, PySolTrace.Optics) for o in optics]
+    ok_stages = [isinstance(s, PySolTrace.Stage) for s in stages]
+
+    assert False in ok_optics, 'Please, check the classes in the optics list'
+    assert False in ok_stages, 'Please, check the classes in the stages list'
+
+    # creating an PySolTrace object
+    pyst = PySolTrace()
+
+    # setting configurations regarding the inclusion of sunshape and surface errors
+    pyst.is_sunshape = True if trace_options.sunshape == 'true' else False
+    pyst.is_surface_errors = True if trace_options.errors == 'true' else False
+
+    # setting the sun
+    pyst.sun = sun
+
+    # including the optics and stages to the PySoltrace object
+    pyst.optics = optics
+    pyst.stages = stages
+
+    # option to run as a point focus system
+    as_power_tower = True if trace_options.point_focus == 'true' else False
+
+    pyst.run(seed=trace_options.seed, as_power_tower=as_power_tower, nthread=trace_options.cpus)
+
+    return pyst
 
 
 ########################################################################################################################

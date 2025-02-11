@@ -55,7 +55,10 @@ def rmse(predictions: array, targets: array):
     return sqrt(((predictions - targets) ** 2).mean())
 
 
-def dic2json(d: dict, file_path: Path = None, file_name: str = None):
+def dic2json(d: dict,
+             file_path: Path = None,
+             file_name: str = None,
+             indent=None):
 
     dict_to_export = deepcopy(d)
     keys = d.keys()
@@ -72,7 +75,7 @@ def dic2json(d: dict, file_path: Path = None, file_name: str = None):
 
         file_full_path = Path(file_path, f"{file_name}.json")
         with open(file_full_path, 'w') as file:
-            json.dump(dict_to_export, file)
+            json.dump(dict_to_export, file, indent=indent)
 
     return dict_to_export
 

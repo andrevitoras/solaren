@@ -215,7 +215,7 @@ def primary_ecs_aim(center: array,
                     rec_aim: array,
                     sun_dir: array) -> array:
     """
-    This method refers to a SolTrace implementation of the Heliostat object as an SolTrace Element.
+    This method refers to a SolTrace implementation of the PrimaryMirror object as an SolTrace Element.
     It calculates the aim point of the Element Coordinate System (ECS) as a [x, 0, z] point-array. Since mirrors
     rotate as the sun moves, this aim point changes with the sun direction vector.
 
@@ -469,10 +469,10 @@ script_file = soltrace_script(file_path=Path.cwd(),
                               optics=optics,
                               geometry=geometry,
                               stats=absorber_stats,
-                              trace=trace)
+                              trace=trace, version=2012)
 
 # running the script
 run_soltrace(lk_file_full_path=script_file)
-
+#
 # reading stats file
 absorber_stats = read_element_stats(absorber_stats.file_full_path)

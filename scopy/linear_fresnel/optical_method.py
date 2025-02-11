@@ -820,16 +820,19 @@ def one_segment_flux_analysis(r_shading: float64[:],
 def flux_analysis_lost_length(theta_l: float64, pt_if: float64,
                               vll: float64[:], vlr: float64[:],
                               length: float64) -> float64:
+
     if theta_l == 0. or pt_if == 0.:
         lost_length = 0.
     else:
-        y_end = max(vll[1], vlr[1])
+        # y_end = max(vll[1], vlr[1])
+        # y_end = min(vll[1], vlr[1])
+        y_end = (vll[1] + vlr[1]) / 2
         if y_end >= length:
             lost_length = 1.
         else:
             lost_length = y_end / length
 
-    return lost_length
+    return abs(lost_length)
 
 
 @njit
@@ -839,6 +842,7 @@ def simple_flux_analysis(theta_l_rad: float64, length: float64,
                          blocking: float64[:], intercepted: float64[:],
                          cum_eff: float64[:, :],
                          end_losses: bool_) -> Tuple[float64, float64, float64, float64, float64]:
+
     n_sha_interval, n_blo_interval, intercept_interval = one_segment_flux_analysis(r_shading=r_shading,
                                                                                    n_shading=n_shading,
                                                                                    blocking=blocking,
@@ -874,6 +878,7 @@ def three_segments_flux_analysis(r_shading: float64[:],
                                  blocking: float64[:],
                                  intercepted: float64[:]) -> \
         Tuple[float64[:], float64[:], float64[:], float64[:], float64[:], float64[:]]:
+
     # First length section -- shading by the neighbor and the receiver
     n_sha1 = reduce_interval(a=n_shading, b=r_shading)
     # update neighbor blocking interval
@@ -924,6 +929,7 @@ def non_shaded_lengths(p: float64[:], ni: float64[:],
                        vms: float64[:],
                        sal: float64[:], sar: float64[:],
                        length: float64) -> Tuple[float64, float64]:
+
     vl_rs, vr_rs = flat_receiver_shading_vectors(p=p, ni=ni, sal=sal, sar=sar)
     ym = abs(vl_rs[1] + vr_rs[1]) / 2.
 
@@ -1079,7 +1085,7 @@ def local_flux_analysis(p: float64[:], i: int64, n: int64, centers: float64[:, :
 
 @njit
 def incidence_data(theta_t: float64, theta_l: float64) -> Tuple[float64[:], float64[:], float64, float64]:
-    Ix = array([1., 0, 0])
+    Ix = array([1., 0., 0])
 
     vi = sun_direction(theta_t, abs(theta_l))  # direction of incident sunlight
     ni = cross(vi, Ix)  # normal vector that defines the incidence plane
@@ -1183,10 +1189,12 @@ def analysis_over_field(theta_t_rad: float64, theta_l_rad: float64,
 
             # Updating the array with the values for each point of the heliostat
             hel_if[j] = pt_if
+            # hel_if[j] = pt_if * cos(ang(vi, ns))
 
         # The intercept factor of a particular heliostat is the average of the values its points.
         # Furthermore, it must account for the cosine effect in the current heliostat.
         gamma[i] = hel_if.mean() * cosine_effect(theta_t_rad=theta_t_rad, theta_l_rad=theta_l_rad, tau=tau[i])
+        # gamma[i] = hel_if.mean()
 
     # The LFR intercept factor in then an average of all its primary mirrors.
     lfr_if = gamma.dot(widths) / widths.sum()  # LFR intercept factor

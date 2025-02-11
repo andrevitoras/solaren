@@ -33,22 +33,23 @@ def dual_aplanat_functions_for_tube(s: float, k: float):
     # The aplanatic secondary optic parametric equation ########################################
     def secondary_function(phi):
         xs = (2 * s * k * h(phi) * tan(0.5 * phi)) / (k * h(phi) * tan(0.5 * phi)**2 + g(phi))
-        ys = - xs / tan(phi)
+        ys = - xs / tan(phi) if abs(phi) > 0 else -k
         return array([xs, ys])
     ############################################################################################
 
     return primary_function, secondary_function
 
 
-def dual4tube(s: float, k: float, NA: float, phi_min=0.00001, upward=True, nbr_pts=151, tube_center=array([0, 0])):
-
+def dual4tube(s: float,
+              k: float,
+              NA: float,
+              phi_min=0., upward=True, nbr_pts=151, tube_center=array([0, 0])):
     """
-
     This function returns the primary and secondary aplanat optics contour surface points. It is based on the aplanat
     input parameters: 's', 'k', and 'NA'.
 
-    This function is based on Gordon's studies [1, 2, 3], which consider the Abbe's unit sphere to give dimensionless
-    equations. Furthermore, the aplanat focus is at the ecs_origin: [0, 0].
+    This function is based on Gordon's studies [1-3], which consider the Abbe's unit sphere to give dimensionless
+    equations. Furthermore, the aplanat focus is at the origin: [0, 0].
 
     [1] Solar Energy 2019;191:697–706. https://doi.org/10.1016/j.solener.2019.08.037.
     [2] Optics Express 2010;18:A41. https://doi.org/10.1364/OE.18.000A41.

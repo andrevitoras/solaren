@@ -9,7 +9,7 @@ from niopy.geometric_transforms import ang, dst, V
 ########################################################################################################################
 # LFR design functions #################################################################################################
 
-def design_cylindrical_heliostat(center: array, width: float, radius: float, nbr_pts=51):
+def design_cylindrical_heliostat(center: array, width: float, radius: float, nbr_pts: int = 221) -> array:
     """
     This function returns the surface points of a cylindrical shape heliostat.
     This set of points define the heliostat contour.
@@ -55,7 +55,7 @@ def design_cylindrical_heliostat(center: array, width: float, radius: float, nbr
     return hel_pts
 
 
-def design_flat_heliostat(center: array, width: float, nbr_pts: int):
+def design_flat_heliostat(center: array, width: float, nbr_pts: int = 221) -> array:
     """
     This function returns the surface points of a flat shape heliostat.
     This set of points define the heliostat contour.
@@ -277,7 +277,7 @@ def boito_curvature(center: array, aim: array, lat: float) -> float:
     return r
 
 
-def primaries_curvature_radius(centers: array, rec_aim: array, curvature_design='zenithal'):
+def primaries_curvature_radius(centers: array, rec_aim: array, radius_design='zenithal'):
 
     sm = array([rec_aim[0], rec_aim[-1]])
 
@@ -286,20 +286,20 @@ def primaries_curvature_radius(centers: array, rec_aim: array, curvature_design=
     for i, center in enumerate(centers):
         hc = array([center[0], center[-1]])
 
-        if isinstance(curvature_design, (float, int)):
+        if isinstance(radius_design, (float, int)):
             r = rabl_curvature(center=hc,
                                aim=rec_aim,
-                               theta_d=curvature_design)
-        elif curvature_design == 'zenithal':
+                               theta_d=radius_design)
+        elif radius_design == 'zenithal':
             r = rabl_curvature(center=hc,
                                aim=rec_aim,
                                theta_d=0.)
-        elif curvature_design == 'SR':
+        elif radius_design == 'SR':
             r = 2 * dst(hc, sm)
-        elif curvature_design == 'flat':
-            r = 0
+        elif radius_design == 'flat':
+            r = 0.
         else:
-            raise ValueError("Please, verify documentation for possible inputs of the 'curvature design' argument!")
+            raise ValueError("Please, verify documentation for possible inputs of the 'radius_design' argument!")
 
         radii[i] = r
 
@@ -307,11 +307,3 @@ def primaries_curvature_radius(centers: array, rec_aim: array, curvature_design=
 
 ########################################################################################################################
 ########################################################################################################################
-
-
-# def non_shading_shift():
-#     pass
-#
-#
-# def nixon_primary_field(w: float, x1: float, ):
-#     pass

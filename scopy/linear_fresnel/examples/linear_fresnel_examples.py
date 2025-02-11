@@ -4,7 +4,7 @@ from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from numpy import array
 
 from niopy.geometric_transforms import dst, nrm
-from scopy.linear_fresnel import uniform_centers, Heliostat, PrimaryField, Absorber, primaries_curvature_radius
+from scopy.linear_fresnel import uniform_centers, PrimaryMirror, PrimaryField, Absorber, primaries_curvature_radius
 from scopy.nio_concentrators import symmetric_cec2evacuated_tube, cpc_type
 from utils import plot_line
 
@@ -68,10 +68,10 @@ primaries_center = uniform_centers(mirror_width=mirror_width,
 # curvature radius of the primary mirrors
 radii_values = primaries_curvature_radius(centers=primaries_center,
                                           rec_aim=rec_aim,
-                                          curvature_design='zenithal')
+                                          radius_design='zenithal')
 
-# primary mirrors as 'Heliostat' objects
-heliostats = [Heliostat(center=hc, width=mirror_width, radius=r)
+# primary mirrors as 'PrimaryMirror' objects
+heliostats = [PrimaryMirror(center=hc, width=mirror_width, radius=r)
               for hc, r in zip(primaries_center, radii_values)]
 
 # the primary field as a 'PrimaryField' object

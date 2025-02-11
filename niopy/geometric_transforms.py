@@ -100,7 +100,7 @@ def ang_h(v: array) -> float:
 def ang_pn(v: array, u: Any = None) -> float:
     """
     This function calculates the angle that vector 'v' makes regarding vector 'u'.
-    It is positive if u is clockwise from v and negative otherwise.
+    It is positive if 'u' is clockwise from v and negative otherwise.
 
     If 'u' is None, it considers the angle regarding the horizontal direction.
     In this case, it is positive if 'v' points up and negative if 'v' points down.

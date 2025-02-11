@@ -18,14 +18,14 @@ addoptic('mirrors_refl');
 // ---- Set Interface -------------------
 opticopt('mirrors_refl', 1, {'dist'='g',
 'refl'=0.93, 'trans'=0, 'errslope'=2,'errspec'=3,
-'refractr'=1.0, 'refracti'=1.2, 'apstop'=3,
+'refractr'=1.0, 'refracti'=1.0, 'apstop'=3,
 'difford'=4, 'grating'=[1.1, 1.2, 1.3, 1.4]});
 // --------------------------------------------
 
 // ---- Set Interface -------------------
 opticopt('mirrors_refl', 2, {'dist'='g',
 'refl'=0, 'trans'=0, 'errslope'=2,'errspec'=3,
-'refractr'=1.0, 'refracti'=1.2, 'apstop'=3,
+'refractr'=1.0, 'refracti'=1.0, 'apstop'=3,
 'difford'=4, 'grating'=[1.1, 1.2, 1.3, 1.4]});
 // --------------------------------------------
 
@@ -37,14 +37,14 @@ addoptic('secondary_refl');
 // ---- Set Interface -------------------
 opticopt('secondary_refl', 1, {'dist'='g',
 'refl'=0.88, 'trans'=0, 'errslope'=2,'errspec'=3,
-'refractr'=1.0, 'refracti'=1.2, 'apstop'=3,
+'refractr'=1.0, 'refracti'=1.0, 'apstop'=3,
 'difford'=4, 'grating'=[1.1, 1.2, 1.3, 1.4]});
 // --------------------------------------------
 
 // ---- Set Interface -------------------
 opticopt('secondary_refl', 2, {'dist'='g',
 'refl'=0, 'trans'=0, 'errslope'=2,'errspec'=3,
-'refractr'=1.0, 'refracti'=1.2, 'apstop'=3,
+'refractr'=1.0, 'refracti'=1.0, 'apstop'=3,
 'difford'=4, 'grating'=[1.1, 1.2, 1.3, 1.4]});
 // --------------------------------------------
 
@@ -55,15 +55,15 @@ opticopt('secondary_refl', 2, {'dist'='g',
 addoptic('tube_abs');
 // ---- Set Interface -------------------
 opticopt('tube_abs', 1, {'dist'='g',
-'refl'=0.040000000000000036, 'trans'=0, 'errslope'=0.0,'errspec'=0.0,
-'refractr'=1.0, 'refracti'=1.2, 'apstop'=3,
+'refl'=0.04, 'trans'=0, 'errslope'=0.0,'errspec'=0.0,
+'refractr'=1.0, 'refracti'=1.0, 'apstop'=3,
 'difford'=4, 'grating'=[1.1, 1.2, 1.3, 1.4]});
 // --------------------------------------------
 
 // ---- Set Interface -------------------
 opticopt('tube_abs', 2, {'dist'='g',
-'refl'=0.040000000000000036, 'trans'=0, 'errslope'=0.0,'errspec'=0.0,
-'refractr'=1.0, 'refracti'=1.2, 'apstop'=3,
+'refl'=0.04, 'trans'=0, 'errslope'=0.0,'errspec'=0.0,
+'refractr'=1.0, 'refracti'=1.0, 'apstop'=3,
 'difford'=4, 'grating'=[1.1, 1.2, 1.3, 1.4]});
 // --------------------------------------------
 
@@ -74,15 +74,15 @@ opticopt('tube_abs', 2, {'dist'='g',
 addoptic('glass_cover_outer_cover');
 // ---- Set Interface -------------------
 opticopt('glass_cover_outer_cover', 1, {'dist'='g',
-'refl'=0, 'trans'=0.96, 'errslope'=0.0,'errspec'=0.0,
-'refractr'=1.55, 'refracti'=1.2, 'apstop'=3,
+'refl'=0, 'trans'=0.9798, 'errslope'=0.0001,'errspec'=0.0001,
+'refractr'=1.55, 'refracti'=1.0, 'apstop'=3,
 'difford'=4, 'grating'=[1.1, 1.2, 1.3, 1.4]});
 // --------------------------------------------
 
 // ---- Set Interface -------------------
 opticopt('glass_cover_outer_cover', 2, {'dist'='g',
-'refl'=0, 'trans'=1, 'errslope'=0.0,'errspec'=0.0,
-'refractr'=1.0, 'refracti'=1.2, 'apstop'=3,
+'refl'=0, 'trans'=0.9798, 'errslope'=0.0001,'errspec'=0.0001,
+'refractr'=1.0, 'refracti'=1.0, 'apstop'=3,
 'difford'=4, 'grating'=[1.1, 1.2, 1.3, 1.4]});
 // --------------------------------------------
 
@@ -93,15 +93,15 @@ opticopt('glass_cover_outer_cover', 2, {'dist'='g',
 addoptic('glass_cover_inner_cover');
 // ---- Set Interface -------------------
 opticopt('glass_cover_inner_cover', 1, {'dist'='g',
-'refl'=0, 'trans'=1, 'errslope'=0.0,'errspec'=0.0,
-'refractr'=1.0, 'refracti'=1.2, 'apstop'=3,
+'refl'=0, 'trans'=0.9798, 'errslope'=0.0001,'errspec'=0.0001,
+'refractr'=1.0, 'refracti'=1.0, 'apstop'=3,
 'difford'=4, 'grating'=[1.1, 1.2, 1.3, 1.4]});
 // --------------------------------------------
 
 // ---- Set Interface -------------------
 opticopt('glass_cover_inner_cover', 2, {'dist'='g',
-'refl'=0, 'trans'=1, 'errslope'=0.0,'errspec'=0.0,
-'refractr'=1.55, 'refracti'=1.2, 'apstop'=3,
+'refl'=0, 'trans'=0.9798, 'errslope'=0.0001,'errspec'=0.0001,
+'refractr'=1.55, 'refracti'=1.0, 'apstop'=3,
 'difford'=4, 'grating'=[1.1, 1.2, 1.3, 1.4]});
 // --------------------------------------------
 
@@ -3306,7 +3306,7 @@ elementopt(317, {'en'=true, 'x'=0.0, 'y'=0.0, 'z'=7.165,
 // ---- Setting the Ray-tracing simulation -------------------------------------------------
 
 traceopt({ 
-'rays'=100000, 'maxrays'=10000000,
+'rays'=100000, 'maxrays'=15000000,
 'include_sunshape'=true, 'optical_errors'=true,
 'cpus'=8, 'seed'=-1, 'point_focus'=false});
 trace();
@@ -3314,7 +3314,7 @@ trace();
 
 //---- Setting the results outputs ----------------------------------------
 
-absorber_data = elementstats(0, 317, 50, 15, 1000, true);
+absorber_data = elementstats(0, 317, 50, 15, 1000.0, true);
 
 cwd('C:\\Users\\INIESC\\Documents\\PythonProjects\\solaren\\soltracepy\\examples\\linear_fresnel');
 filename = 'absorber_flux_stats.json';
@@ -3322,7 +3322,7 @@ stats_file = open(filename, 'w');
 write_line(stats_file, '{');
 
 float_keys = ["min_flux", "bin_size_x", "power_per_ray", "bin_size_y", "peak_flux",
-"ave_flux", "radius", "num_rays"];
+"ave_flux", "sigma_flux", "uniformity", "radius", "num_rays"];
 for (i=0; i<#float_keys; i++)
 {
 write_line(stats_file, '"' + float_keys[i] + '": ' + absorber_data{float_keys[i]} + ',');

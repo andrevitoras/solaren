@@ -15,11 +15,14 @@ concentrator, and the y-axis is the longitudinal direction.
 from pathlib import Path
 
 from matplotlib import pyplot as plt
-from numpy import arctan, log
+from numpy import arctan, log, ndarray
 
 from niopy.geometric_transforms import nrm
 from niopy.plane_curves import PlaneCurve
 from niopy.reflection_refraction import rfx_nrm
+
+from pysoltrace import PySolTrace
+from pysoltrace.geometries import flat_element as py_flat_element, tubular_element, linear_fresnel_mirror
 
 from scopy.linear_fresnel.analysis import *
 from scopy.linear_fresnel.design import *
@@ -30,160 +33,10 @@ from scopy.nio_concentrators import symmetric_cpc2tube, cpc_type, symmetric_cpc2
     symmetric_cec2evacuated_tube
 
 from scopy.sunlight import SiteData
-
 from soltracepy import OpticalSurface, Element
-
-from soltracepy.auxiliary import reflective_surface, secondary_surface, absorber_tube_surface, \
-    flat_absorber_surface, cover_surfaces, flat_element
+from soltracepy.auxiliary import flat_element
 
 from utils import dic2json, plot_line
-
-
-class OpticalProperty:
-    """
-    This class aims to represent common optical properties in the context of the design and analysis of the
-    linear Fresnel collector.
-
-    It contains reflective, absorptive and transmissive properties.
-    """
-
-    class reflector:
-        """
-        This class stands for a common one-side reflective surface, as in a linear Fresnel primary mirror.
-        """
-
-        def __init__(self, name: str, rho=1.0, slope_error=0., spec_error=0.):
-            """
-            :param name: The variable_name of the property
-            :param rho: The reflector hemispherical reflectance. It should be a value between 0 and 1.
-            :param slope_error: The slope error of the reflector surface, in radians.
-            :param spec_error: THe specular error of the reflector surface, in radians.
-            """
-
-            assert 0 <= abs(rho) <= 1, ValueError('Reflectance value must be between 0 and 1.')
-
-            self.rho = abs(rho)
-            self.type = 'reflect'
-            self.slope_error = abs(slope_error)
-            self.spec_error = abs(spec_error)
-            self.name = name
-
-        def to_soltrace(self):
-            """
-            This method transform the OpticalProperty in an equivalent SolTrace OpticalSurface object.
-            See 'soltracepy.OpticalSurface'.
-
-            An OpticalSurface object has two sides: front and back. In this case of a single-side reflector, the front
-            is the reflective interface with the correspondent property, and the back side is a perfect absorber.
-            It is important to highlight that the front interface is the positive direction given by the z-axis of the
-            Element Coordinate System (ECS) of the SolTrace Element in which the property is applied to.
-
-            :return: As equivalent SolTrace OpticalProperty object.
-            """
-
-            return reflective_surface(name=self.name, rho=self.rho,
-                                      slope_error=self.slope_error * 1e3, spec_error=self.spec_error * 1e3)
-
-    class flat_absorber:
-
-        def __init__(self, name: str, alpha=1.):
-            """
-            :param alpha: The absorbance of the absorber surface. It must be a value between 0 and 1.
-            """
-
-            assert 0 <= abs(alpha) <= 1, ValueError('Absorbance value must be between 0 and 1.')
-
-            self.type = 'reflect'
-            self.alpha = abs(alpha)
-            self.name = name
-
-        def to_soltrace(self):
-            """
-            :return: This method returns an equivalent SolTrace Optic object.
-            """
-            return flat_absorber_surface(name=self.name, alpha=self.alpha)
-
-    class absorber_tube:
-
-        def __init__(self, name: str, alpha=1.):
-            """
-            :param alpha: The absorbance of the absorber surface. It must be a value between 0 and 1.
-            """
-
-            assert 0 <= abs(alpha) <= 1, ValueError('Absorbance value must be between 0 and 1.')
-
-            self.type = 'reflect'
-            self.alpha = abs(alpha)
-            self.name = name
-
-        def to_soltrace(self):
-            """
-            :return: This method returns an equivalent SolTrace Optic.
-            """
-
-            return absorber_tube_surface(name=self.name, alpha=self.alpha)
-
-    # class transmissive_cover:
-    #
-    #     def __init__(self, tau: float, refractive_index=1.52, name='cover'):
-    #         assert 0 <= abs(tau) <= 1, ValueError('Transmittance value must be between 0 and 1.')
-    #
-    #         self.name = name
-    #         self.tau = abs(tau)
-    #         self.ref_index = refractive_index
-    #
-    #     def to_soltrace(self):
-    #
-    #         return transmissive_surface(name=self.name, tau=self.tau, nf=1, nb=self.ref_index)
-
-    class evacuated_tube:
-
-        def __init__(self, alpha: float, tau: float, ref_index=1.52, name='evacuated_tube'):
-            assert 0 <= abs(alpha) <= 1, ValueError('Absorbance value must be between 0 and 1.')
-            assert 0 <= abs(tau) <= 1, ValueError('Transmittance value must be between 0 and 1.')
-
-            self.name = name
-
-            self.alpha = abs(alpha)
-            self.tau = abs(tau)
-            self.n = abs(ref_index)
-
-        def to_soltrace(self):
-            """
-            :return: It returns a list with equivalent SolTrace Optics, from the outer cover to the absorber.
-            """
-
-            outer_cover, inner_cover = cover_surfaces(tau=self.tau, refractive_index=self.n, name=self.name)
-
-            absorber = OpticalProperty.absorber_tube(name=f'{self.name}_absorber', alpha=self.alpha).to_soltrace()
-
-            return [outer_cover, inner_cover, absorber]
-
-    class secondary:
-
-        def __init__(self, name: str, rho=1.0, slope_error=0., spec_error=0.):
-            """
-            :param name: The variable_name of the property.
-            :param rho: The reflector hemispherical reflectance. It should be a value between 0 and 1.
-            :param slope_error: The slope error of the reflector surface, in mrad.
-            :param spec_error: THe specular error of the reflector surface, in mrad.
-            """
-
-            assert 0 <= abs(rho) <= 1, ValueError('Reflectance value must be between 0 and 1.')
-
-            self.rho = abs(rho)
-            self.type = 'reflect'
-            self.slope_error = abs(slope_error)
-            self.spec_error = abs(spec_error)
-            self.name = name
-
-        def to_soltrace(self):
-            """
-            :return: This method returns an equivalent SolTrace Optic.
-            """
-
-            return secondary_surface(name=self.name, rho=self.rho,
-                                     slope_error=self.slope_error * 1e3, spec_error=self.spec_error * 1e3)
 
 
 class Absorber:
@@ -219,6 +72,29 @@ class Absorber:
 
             return elem
 
+        def to_pysoltrace(self,
+                          id_number: int,
+                          parent_stage: PySolTrace.Stage,
+                          length: float,
+                          optic: PySolTrace.Optics,
+                          upwards=False):
+
+            ecs_origin = array([self.center[0], 0, self.center[-1]])
+
+            if upwards:
+                aim = self.center + R(pi/2).dot(nrm(self.s2 - self.s1)) * self.width
+            else:
+                aim = self.center + R(-pi/2).dot(nrm(self.s2 - self.s1)) * self.width
+
+            ecs_aim = array([aim[0], 0, aim[-1]])
+            element_object = py_flat_element(width=self.width / 1000.,
+                                             length=length/1000.,
+                                             ecs_origin=ecs_origin/1000.,
+                                             ecs_aim=ecs_aim/1000.,
+                                             parent_stage=parent_stage, id_number=id_number, optic=optic)
+
+            return element_object
+
     class tube:
 
         def __init__(self, radius: float, center: array, name='absorber_tube', nbr_pts=121):
@@ -246,6 +122,17 @@ class Absorber:
             return tube2soltrace(tube=self,
                                  name=self.name if name is None else name,
                                  length=length, optic=optic)
+
+        def to_pysoltrace(self, length: float,
+                          parent_stage: PySolTrace.Stage, id_number: int,
+                          optic: PySolTrace.Optics):
+
+            ecs_origin = array([self.center[0], 0, self.center[-1] - self.radius])
+            ecs_aim = ecs_origin + array([0, 0, 2*self.radius])
+
+            return tubular_element(tube_radius=self.radius/1000, tube_length=length/1000,
+                                   ecs_origin=ecs_origin/1000, ecs_aim=ecs_aim/1000,
+                                   parent_stage=parent_stage, id_number=id_number, optic=optic)
 
     class evacuated_tube:
 
@@ -306,12 +193,27 @@ class Absorber:
                                 inner_cover_optic: OpticalSurface,
                                 absorber_optic: OpticalSurface,
                                 name: str = None) -> list:
+
             return evacuated_tube2soltrace(geometry=self,
                                            name=self.name if name is None else name,
                                            length=length,
                                            outer_cover_optic=outer_cover_optic,
                                            inner_cover_optic=inner_cover_optic,
                                            absorber_optic=absorber_optic)
+
+        def to_pysoltrace(self, length: float,
+                          outer_cover_optic: PySolTrace.Optics,
+                          inner_cover_optic: PySolTrace.Optics,
+                          absorber_optic: PySolTrace.Optics,
+                          parent_stage: PySolTrace.Stage, id_number: int) -> list:
+
+            optics = [outer_cover_optic, inner_cover_optic, absorber_optic]
+
+            elements = [tube.to_pysoltrace(length=length, parent_stage=parent_stage,
+                                           id_number=id_number + i, optic=optics[i])
+                        for i, tube in enumerate([self.outer_tube, self.inner_tube, self.absorber_tube])]
+
+            return elements
 
 
 class Secondary:
@@ -342,9 +244,9 @@ class Secondary:
             return trapezoidal2soltrace(geometry=self, name=self.name, length=length, optic=optic)
 
 
-class Heliostat:
+class PrimaryMirror:
     """
-    The class Heliostat aims to represent a linear Fresnel primary mirror. It can be flat or cylindrical.
+    The class PrimaryMirror aims to represent a linear Fresnel primary mirror. It can be flat or cylindrical.
 
     Parabolic primaries were not included since they are equivalent to the cylindrical ones and not that simple
     to design. For a further understanding, one must read Refs. [1-5], particularly Ref.[6].
@@ -359,7 +261,7 @@ class Heliostat:
 
     def __init__(self, width: float, center: array, radius: float, nbr_pts=201):
 
-        # The basic attributes of a Heliostat object #####
+        # The basic attributes of a PrimaryMirror object #####
         self.width = abs(width)
         self.radius = abs(radius)
         self.center = array([center[0], center[-1]])
@@ -367,7 +269,7 @@ class Heliostat:
 
         # Defining an attribute for the shape of the heliostats ###
         # It can be flat or cylindrical
-        if self.radius == 0:
+        if self.radius <= 4000.:
             self.shape = 'flat'
         else:
             self.shape = 'cylindrical'
@@ -378,8 +280,8 @@ class Heliostat:
         self.n_pts = nbr_pts + 1 if nbr_pts % 2 == 0 else nbr_pts
         #################################################################################
 
-        #############################################################################################################
-        # Heliostat attributes that are defined as [x,y] point-arrays/vector-arrays #################################
+        ################################################################################################################
+        # PrimaryMirror attributes that are defined as [x,y] point-arrays/vector-arrays ################################
 
         # The design of the point-arrays which defines the heliostat contour
         # These point-arrays consider the mirror at the horizontal position
@@ -391,7 +293,7 @@ class Heliostat:
             self.contour = design_flat_heliostat(center=self.center, width=self.width,
                                                  nbr_pts=self.n_pts)
 
-        # Attribute that holds the Heliostat object as a PlaneCurve object.
+        # Attribute that holds the PrimaryMirror object as a PlaneCurve object.
         self.curve = self.as_plane_curve()
 
         # The normal vectors at the heliostat surface points.
@@ -401,7 +303,7 @@ class Heliostat:
         #############################################################################################################
 
         #########################################################################################################
-        # Heliostat attributes that are defined as [x, 0, z] point-arrays/vector-arrays #########################
+        # PrimaryMirror attributes that are defined as [x, 0, z] point-arrays/vector-arrays #########################
         # That is, the transversal plane is the ZX-plane.
         self.zx_center = transform_vector(self.center)
         self.zx_pts = transform_heliostat(self.contour)
@@ -456,11 +358,11 @@ class Heliostat:
         seg_normals = transform_heliostat(normals)
         #######################################################################
 
-        return seg_points, seg_normals
+        return seg_points.round(10), seg_normals.round(10)
 
     def as_plane_curve(self):
         """
-        A method to return the Heliostat object as a PlaneCurve object defined by the contour point.
+        A method to return the PrimaryMirror object as a PlaneCurve object defined by the contour point.
 
         :return: It returns the xy points of the heliostat as a PlaneCurve object.
         """
@@ -605,7 +507,7 @@ class Heliostat:
 
     def ecs_aim_pt(self, rec_aim: array, SunDir: array) -> array:
         """
-        This method refers to a SolTrace implementation of the Heliostat object as an SolTrace Element.
+        This method refers to a SolTrace implementation of the PrimaryMirror object as an SolTrace Element.
         It calculates the aim point of the Element Coordinate System (ECS) as a [x, 0, z] point-array. Since mirrors
         rotate as the sun moves, this aim point changes with the sun direction vector.
 
@@ -652,6 +554,19 @@ class Heliostat:
 
         return elem
 
+    def to_pysoltrace(self,
+                      sun_dir: array, rec_aim: array, length: float,
+                      parent_stage: PySolTrace.Stage, id_number: int,
+                      optic: PySolTrace.Optics):
+
+        ecs_aim = self.ecs_aim_pt(rec_aim=rec_aim, SunDir=sun_dir)
+
+        element = linear_fresnel_mirror(width=self.width/1000., length=length/1000., radius=self.radius/1000.,
+                                        parent_stage=parent_stage, id_number=id_number,
+                                        ecs_origin=self.zx_center/1000., ecs_aim=ecs_aim / 1000.,
+                                        optic=optic)
+        return element
+
 
 class PrimaryField:
     """
@@ -661,18 +576,19 @@ class PrimaryField:
 
     def __init__(self, heliostats: list):
         """
-        :param heliostats: A list of Heliostat objects.
+        :param heliostats: A list of PrimaryMirror objects.
 
         """
 
-        # An attribute for the list of Heliostat objects that comprises the field ######################################
-        # if a non Heliostat object is added, an error will be raised.
+        # An attribute for the list of PrimaryMirror objects that comprises the field ##################################
+        # if a non PrimaryMirror object is added, an error will be raised.
         self.heliostats = []
         for i, hel in enumerate(heliostats):
-            if isinstance(hel, Heliostat):
+            if isinstance(hel, PrimaryMirror):
                 self.heliostats += [hel]
             else:
-                raise f'A non Heliostat instance was inputted. Please, check the {i + 1}-element of the inputted list'
+                raise f'A non PrimaryMirror instance was inputted. ' \
+                      f'Please, check the {i + 1}-element of the inputted list'
         ################################################################################################################
 
         # Auxiliary attributes ############################################
@@ -687,6 +603,13 @@ class PrimaryField:
         # These attributes are point and vector arrays with the format [x, y]
         self.centers = zeros(shape=(self.nbr_mirrors, 2))
         self.centers[:] = [hel.center for hel in self.heliostats]
+
+        # the shifts... That is, the distance between consecutive center points
+        self.shifts = array([self.centers[i][0] - self.centers[i + 1][0]
+                             for i in range(len(self.centers) - 1)])
+
+        self.gaps = array([self.shifts[i] - 0.5 * (self.widths[i] + self.widths[i + 1])
+                           for i in range(len(self.centers) - 1)])
 
         self.primaries = array([hel.contour for hel in self.heliostats])
         #################################################################################
@@ -732,7 +655,7 @@ class PrimaryField:
 
         gamma = intercept_factor(field=self.seg_primaries, normals=self.seg_normals,
                                  centers=self.zx_centers, widths=self.widths,
-                                 theta_t=theta_t, theta_l=theta_l, aim_pt=aim_pt, s1=s1, s2=s2,
+                                 theta_t=theta_t, theta_l=theta_l, aim=aim_pt, s1=s1, s2=s2,
                                  length=length, cum_eff=cum_eff, end_losses=end_losses)
 
         return gamma
@@ -808,11 +731,16 @@ class PrimaryField:
 
         return acceptance_angle(acceptance_data=acc_data, ref_value=ref_value)
 
-    def to_soltrace(self, rec_aim: array, sun_dir: array, length: float, optic: OpticalSurface) -> list:
+    def to_soltrace(self, rec_aim: array or list, sun_dir: array, length: float, optic: OpticalSurface) -> list:
+
+        if isinstance(rec_aim, (list, ndarray)) and len(rec_aim) == self.centers.shape[0]:
+            tracking_points = rec_aim
+        else:
+            tracking_points = [rec_aim] * self.centers.shape[0]
 
         elements = [hel.as_soltrace_element(name=f'Heliostat_{i + 1}', length=length,
-                                            rec_aim=rec_aim, sun_dir=sun_dir, optic=optic)
-                    for i, hel in enumerate(self.heliostats)]
+                                            rec_aim=a, sun_dir=sun_dir, optic=optic)
+                    for i, (hel, a) in enumerate(zip(self.heliostats, tracking_points))]
 
         return elements
 
@@ -907,13 +835,13 @@ class LFR:
 # Soltrace functions ###################################################################################################
 
 
-def heliostat2soltrace(hel: Heliostat, name: str,
+def heliostat2soltrace(hel: PrimaryMirror, name: str,
                        sun_dir: array, rec_aim: array, length: float,
                        optic: OpticalSurface) -> Element:
     """
-    This function considers a Heliostat object and returns it as a Soltrace Element object (see soltracepy.Element).
+    This function considers a PrimaryMirror object and returns it as a Soltrace Element object (see soltracepy.Element).
 
-    :param hel: Heliostat object.
+    :param hel: PrimaryMirror object.
     :param name: A variable_name of the element to be inserted in the 'comment' argument.
     :param sun_dir: A 3D vector-array which represents the sun direction.
     :param rec_aim: The aiming point at the receiver used as reference for the tracking, a point-array.
